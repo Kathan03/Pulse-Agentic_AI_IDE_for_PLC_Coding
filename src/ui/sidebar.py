@@ -6,6 +6,7 @@ import os
 import json
 from pathlib import Path
 import flet as ft
+from src.ui.theme import VSCodeColors, Fonts, Spacing, create_logo_image
 
 
 class Sidebar:
@@ -19,12 +20,20 @@ class Sidebar:
     # Configuration file path for storing recent workspaces
     CONFIG_FILE = Path("data") / "workspace_config.json"
 
-    def __init__(self):
-        """Initialize the Sidebar component."""
+    def __init__(self, editor_manager=None):
+        """
+        Initialize the Sidebar component.
+
+        Args:
+            editor_manager: Reference to EditorManager for opening files in tabs
+        """
+        self.editor_manager = editor_manager
         self.current_path = None
         self.workspace_root = None  # Store the workspace root directory
         self.recent_workspaces = []  # List of recently opened workspace paths
         self.file_picker = None  # Will be initialized when page is available
+        self.current_mode = "Agent Mode"  # Default mode
+        self.feedback_field = None  # Reference to feedback TextField
 
         # Load recent workspaces from config file
         self._load_workspaces_from_config()
@@ -39,8 +48,8 @@ class Sidebar:
         # Current path display
         self.path_text = ft.Text(
             "",
-            size=10,
-            color="#888888",
+            size=Fonts.FONT_SIZE_SMALL,
+            color=VSCodeColors.SIDEBAR_TITLE_FOREGROUND,
             italic=True,
             max_lines=2,
             overflow=ft.TextOverflow.ELLIPSIS
@@ -53,10 +62,11 @@ class Sidebar:
             options=[],
             width=230,
             on_change=lambda e: self.switch_workspace(e.control.value),
-            text_size=11,
+            text_size=Fonts.FONT_SIZE_SMALL,
             dense=True,
-            bgcolor="#3C3C3C",
-            border_color="#505050"
+            bgcolor=VSCodeColors.DROPDOWN_BACKGROUND,
+            border_color=VSCodeColors.DROPDOWN_BORDER,
+            color=VSCodeColors.DROPDOWN_FOREGROUND,
         )
 
         # Navigation buttons
@@ -66,7 +76,7 @@ class Sidebar:
             tooltip="Go to parent directory",
             on_click=lambda _: self.go_back(),
             disabled=True,
-            icon_color="#E0E0E0"
+            icon_color=VSCodeColors.SIDEBAR_FOREGROUND
         )
 
         self.home_button = ft.IconButton(
@@ -75,7 +85,7 @@ class Sidebar:
             tooltip="Go to workspace root",
             on_click=lambda _: self.go_to_root(),
             disabled=True,
-            icon_color="#E0E0E0"
+            icon_color=VSCodeColors.SIDEBAR_FOREGROUND
         )
 
         # Open folder button
@@ -84,37 +94,152 @@ class Sidebar:
             icon=ft.Icons.FOLDER_OPEN,
             on_click=self.open_folder_dialog,
             style=ft.ButtonStyle(
-                bgcolor="#3C3C3C",
-                color="#E0E0E0",
-                padding=ft.padding.symmetric(horizontal=10, vertical=5)
+                bgcolor=VSCodeColors.BUTTON_SECONDARY_BACKGROUND,
+                color=VSCodeColors.BUTTON_SECONDARY_FOREGROUND,
+                padding=ft.padding.symmetric(horizontal=Spacing.PADDING_MEDIUM, vertical=Spacing.PADDING_SMALL)
             ),
             height=32
         )
 
-        # Build the main container
+        # Mode selector dropdown - More compact
+        self.mode_selector = ft.Dropdown(
+            label="Mode",
+            value="Agent Mode",
+            options=[
+                ft.dropdown.Option("Agent Mode"),
+                ft.dropdown.Option("Plan Mode"),
+                ft.dropdown.Option("Ask Mode"),
+            ],
+            width=160,
+            on_change=self._on_mode_changed,
+            text_size=Fonts.FONT_SIZE_SMALL,
+            dense=True,
+            bgcolor=VSCodeColors.DROPDOWN_BACKGROUND,
+            border_color=VSCodeColors.DROPDOWN_BORDER,
+            color=VSCodeColors.DROPDOWN_FOREGROUND,
+        )
+
+        # Create Pulse logo image for button
+        pulse_logo = create_logo_image(width=24, height=24)
+
+        # Open Agent button - Compact logo button
+        self.open_agent_button = ft.Container(
+            content=pulse_logo,
+            bgcolor=VSCodeColors.BUTTON_SECONDARY_BACKGROUND,
+            padding=ft.padding.all(Spacing.PADDING_SMALL),
+            border_radius=Spacing.BORDER_RADIUS_SMALL,
+            border=ft.border.all(1, VSCodeColors.ACTIVITY_BAR_ACTIVE_BORDER),
+            ink=True,
+            on_click=self._on_open_agent_click,
+            on_hover=lambda e: self._on_button_hover(e),
+            tooltip="Open Pulse Agent Chat",
+            width=38,
+            height=38,
+        )
+
+        # Feedback TextField for Code Intelligence
+        self.feedback_field = ft.TextField(
+            hint_text="Describe what went wrong...",
+            hint_style=ft.TextStyle(color=VSCodeColors.INPUT_PLACEHOLDER_FOREGROUND),
+            multiline=True,
+            min_lines=2,
+            max_lines=4,
+            text_size=Fonts.FONT_SIZE_SMALL,
+            bgcolor=VSCodeColors.INPUT_BACKGROUND,
+            color=VSCodeColors.INPUT_FOREGROUND,
+            border_color=VSCodeColors.INPUT_BORDER,
+            focused_border_color=VSCodeColors.INPUT_ACTIVE_BORDER,
+            on_submit=self._on_feedback_submit,
+        )
+
+        # Build the main container with three sections
         self.container = ft.Container(
             width=250,
-            bgcolor="#2C2C2C",
-            padding=10,
+            bgcolor=VSCodeColors.SIDEBAR_BACKGROUND,
+            padding=Spacing.PADDING_MEDIUM,
             content=ft.Column(
                 controls=[
                     # Header with workspace label
                     ft.Row(
                         controls=[
                             ft.Text(
-                                "WORKSPACE",
-                                size=12,
+                                "PULSE IDE",
+                                size=Fonts.FONT_SIZE_NORMAL,
                                 weight=ft.FontWeight.BOLD,
-                                color="#E0E0E0"
+                                color=VSCodeColors.SIDEBAR_TITLE_FOREGROUND
                             ),
                         ],
                         alignment=ft.MainAxisAlignment.START
+                    ),
+                    ft.Divider(height=1, color=VSCodeColors.SIDEBAR_BORDER),
+
+                    # ===== SECTION 1: PULSE AGENT =====
+                    ft.Text(
+                        "PULSE AGENT",
+                        size=Fonts.FONT_SIZE_SMALL,
+                        weight=ft.FontWeight.BOLD,
+                        color=VSCodeColors.ACTIVITY_BAR_INACTIVE_FOREGROUND
+                    ),
+                    # Mode selector and Open Agent button in horizontal row
+                    ft.Row(
+                        controls=[
+                            self.mode_selector,
+                            self.open_agent_button,
+                        ],
+                        spacing=Spacing.PADDING_SMALL,
+                        alignment=ft.MainAxisAlignment.START,
+                    ),
+                    ft.Divider(height=1, color=VSCodeColors.SIDEBAR_BORDER),
+
+                    # ===== SECTION 2: CODE INTELLIGENCE =====
+                    ft.Text(
+                        "CODE INTELLIGENCE",
+                        size=Fonts.FONT_SIZE_SMALL,
+                        weight=ft.FontWeight.BOLD,
+                        color=VSCodeColors.ACTIVITY_BAR_INACTIVE_FOREGROUND
+                    ),
+                    # Customizer agent feedback interface
+                    ft.Container(
+                        content=ft.Column(
+                            controls=[
+                                ft.Text(
+                                    "Report issues with generated code:",
+                                    size=Fonts.FONT_SIZE_SMALL,
+                                    color=VSCodeColors.SIDEBAR_FOREGROUND,
+                                ),
+                                self.feedback_field,
+                                ft.ElevatedButton(
+                                    text="Submit Feedback",
+                                    icon=ft.Icons.SEND,
+                                    on_click=self._on_feedback_submit,
+                                    style=ft.ButtonStyle(
+                                        bgcolor=VSCodeColors.BUTTON_SECONDARY_BACKGROUND,
+                                        color=VSCodeColors.BUTTON_SECONDARY_FOREGROUND,
+                                        padding=ft.padding.symmetric(horizontal=Spacing.PADDING_SMALL, vertical=Spacing.PADDING_SMALL)
+                                    ),
+                                    height=28,
+                                ),
+                            ],
+                            spacing=Spacing.PADDING_SMALL,
+                        ),
+                        bgcolor=VSCodeColors.EDITOR_BACKGROUND,
+                        padding=Spacing.PADDING_SMALL,
+                        border_radius=Spacing.BORDER_RADIUS_SMALL,
+                    ),
+                    ft.Divider(height=1, color=VSCodeColors.SIDEBAR_BORDER),
+
+                    # ===== SECTION 3: WORKSPACE =====
+                    ft.Text(
+                        "WORKSPACE",
+                        size=Fonts.FONT_SIZE_SMALL,
+                        weight=ft.FontWeight.BOLD,
+                        color=VSCodeColors.ACTIVITY_BAR_INACTIVE_FOREGROUND
                     ),
                     # Open folder button
                     self.open_folder_button,
                     # Recent workspaces dropdown
                     self.workspace_dropdown,
-                    ft.Divider(height=1, color="#404040"),
+                    ft.Divider(height=1, color=VSCodeColors.SIDEBAR_BORDER),
                     # Navigation bar
                     ft.Row(
                         controls=[
@@ -128,14 +253,14 @@ class Sidebar:
                         spacing=5,
                         alignment=ft.MainAxisAlignment.START
                     ),
-                    ft.Divider(height=1, color="#404040"),
+                    ft.Divider(height=1, color=VSCodeColors.SIDEBAR_BORDER),
                     # File list container
                     ft.Container(
                         content=self.file_list_column,
                         expand=True
                     )
                 ],
-                spacing=5,
+                spacing=3,
                 expand=True
             )
         )
@@ -293,9 +418,11 @@ class Sidebar:
             # Navigate into directory
             self.load_directory(str(path))
         else:
-            # For MVP, just print the file path
-            # In future iterations, this will open the file in the editor
-            print(f"Selected file: {path}")
+            # Open file in the editor manager
+            if self.editor_manager:
+                self.editor_manager.open_file(str(path))
+            else:
+                print(f"Selected file: {path} (No editor manager connected)")
 
     def go_back(self):
         """Navigate to the parent directory."""
@@ -391,6 +518,65 @@ class Sidebar:
         """
         if workspace_path and Path(workspace_path).is_dir():
             self.load_directory(workspace_path, set_as_root=True)
+
+    def _on_mode_changed(self, e):
+        """
+        Handle mode selection change.
+
+        Args:
+            e: Event object from dropdown
+        """
+        self.current_mode = e.control.value
+        print(f"Mode changed to: {self.current_mode}")
+        # TODO: Wire this to agent orchestration engine to switch modes
+
+    def _on_button_hover(self, e):
+        """Handle hover effect on Open Agent button."""
+        if e.data == "true":  # Mouse enter
+            e.control.bgcolor = VSCodeColors.BUTTON_SECONDARY_HOVER
+        else:  # Mouse leave
+            e.control.bgcolor = VSCodeColors.BUTTON_SECONDARY_BACKGROUND
+        e.control.update()
+
+    def _on_open_agent_click(self, e):
+        """
+        Handle Open Agent button click.
+        Opens the Pulse Agent tab in the editor with the currently selected mode.
+
+        Args:
+            e: Event object from button click
+        """
+        if self.editor_manager:
+            self.editor_manager.open_agent(mode=self.current_mode)
+        else:
+            print("No editor manager connected")
+
+    def _on_feedback_submit(self, e):
+        """
+        Handle feedback submission from Code Intelligence section.
+        Sends user feedback about generated code to the Customizer agent.
+
+        Args:
+            e: Event object from button click or text field submit
+        """
+        if self.feedback_field.value and self.feedback_field.value.strip():
+            feedback_text = self.feedback_field.value.strip()
+            print(f"User feedback submitted: {feedback_text}")
+            # TODO: Wire this to Customizer agent for feedback processing
+
+            # Clear the feedback field
+            self.feedback_field.value = ""
+            if self.feedback_field.page:
+                self.feedback_field.update()
+
+    def get_current_mode(self):
+        """
+        Get the currently selected mode.
+
+        Returns:
+            Current mode string ("Agent Mode", "Plan Mode", or "Ask Mode")
+        """
+        return self.current_mode
 
     def _load_workspaces_from_config(self):
         """

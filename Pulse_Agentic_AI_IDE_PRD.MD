@@ -1,8 +1,9 @@
 # Pulse – Agentic AI IDE for PLC Coding
 
 **Document Type:** Product Requirements Document (PRD)
-**MVP Timeline:** 2.5 days (~50–60 hours)
+**Timeline:** 7 days (~140 hours)
 **Platform:** Windows Desktop Application
+**Scope:** Fully functional IDE (UI) + MVP agents (OpenAI GPT-4o)
 
 ---
 
@@ -57,37 +58,58 @@ Pulse is an Agentic AI IDE for PLC-style code, delivered as a local Windows desk
 
 ---
 
-## 4. Scope – Desktop App MVP
+## 4. Scope – Fully Functional IDE with MVP Agents
 
-### In Scope (MVP)
+### Philosophy
+* **UI & IDE Experience:** Production-quality, VS Code-level user experience (fully functional IDE)
+* **Agent Implementation:** MVP using OpenAI GPT-4o (functional but not optimized)
+
+### In Scope
 **Windows desktop application built with:**
-* **UI:** Python + Flet.
-* **Orchestration:** LangGraph for multi-agent orchestration.
-* **Storage:** Local file system access to a user-selected workspace folder.
-* **Persistence:** SQLite for session/state persistence.
-* **RAG:** Local vector store (e.g., Chroma) for context-aware Q&A over project files.
+* **UI:** Python + Flet (VS Code-style layout and interactions)
+* **Orchestration:** LangGraph (multi-agent workflow) + CrewAI/Autogen (node implementation)
+* **Storage:** Local file system access to a user-selected workspace folder
+* **Persistence:** SQLite for session/state persistence
+* **RAG:** Local vector store (Chroma) for context-aware Q&A over project files
 
 **Agentic core:**
-* Planner, Coder, Tester, QA, Customizer agents.
+* Planner, Coder, Tester, QA, Customizer agents (MVP implementation using GPT-4o)
 
 **Interaction modes:**
-* Agent Mode (fully autonomous loop).
-* Plan Mode (human-in-the-loop).
-* Ask Mode (chat/Q&A only).
+* Agent Mode (fully autonomous loop)
+* Plan Mode (human-in-the-loop)
+* Ask Mode (chat/Q&A only)
 
-**Embedded code editor:**
-* In-app text editor for viewing and editing PLC-style code (files in the workspace), with basic affordances (monospaced font, line numbers, read/write integration with the Coder Agent).
+**VS Code-style IDE features:**
+* **Tabbed Editor:**
+  * Multiple file tabs with close buttons (×)
+  * Permanent "Pulse Chat" tab (Tab 0) for agent interactions
+  * Click files in sidebar to open in new tabs
+* **Integrated Terminal:**
+  * Bottom panel with terminal interface
+  * Black background, monospace font
+  * Command history support
+* **Resizable Panels:**
+  * Draggable vertical splitter (sidebar ↔ main content)
+  * Draggable horizontal splitter (editor ↔ terminal)
+* **Workspace File Tree:**
+  * Left sidebar showing folder structure
+  * Files open in editor on click
+* **Agent Panel:**
+  * Mode selector (Agent/Plan/Ask)
+  * Customizer feedback section
 
 **CI/CD (GitHub Actions workflow):**
-* Run tests and linting.
-* Build Windows .exe artifact via PyInstaller or flet pack.
-* Attach binary to GitHub Release.
+* Run tests and linting
+* Build Windows .exe artifact via PyInstaller or flet pack
+* Attach binary to GitHub Release
 
-### Out of Scope (MVP)
-* Direct connection to live PLC hardware.
-* Support for multiple PLC vendor IDEs or proprietary project formats.
-* Rich project management (multi-project dashboards, collaboration).
-* Cloud backend, user accounts, or centralized logging.
+### Out of Scope
+* Direct connection to live PLC hardware
+* Support for multiple PLC vendor IDEs or proprietary project formats
+* Rich project management (multi-project dashboards, collaboration)
+* Cloud backend, user accounts, or centralized logging
+* Advanced editor features (IntelliSense, debugger, extensions)
 
 ---
 
@@ -137,25 +159,74 @@ At a high level:
 
 ## 7. Key Features – Agents & IDE
 
-### 7.0 In-IDE Code Editing & Workspace View
-*Purpose: Make Pulse a usable day-to-day IDE, not just an AI command console.*
+### 7.0 VS Code-Style IDE Experience
+*Purpose: Deliver a production-quality IDE that engineers will want to use daily.*
 
-* **Embedded Code Editor:**
-    * Central panel shows the currently selected file from the workspace.
-    * Supports viewing and editing PLC-style (Structured Text-like) code.
-    * Basic editor affordances (monospaced font, line numbers, simple keyboard shortcuts).
-    * Changes are saved to disk and become part of the context for all agents.
-* **File Tree / Workspace Panel:**
-    * Left-hand panel shows the workspace folder structure.
-    * Selecting a file opens it in the editor.
-    * New files created by the Coder Agent appear automatically in the tree.
+**Layout (VS Code-inspired):**
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Pulse - Agentic AI IDE                    │
+├──────────┬──────────────────────────────────────────────────┤
+│          │  [Pulse Chat] [main.st ×] [motor_ctrl.st ×]     │
+│ Sidebar  │  ┌─────────────────────────────────────────────┐ │
+│          │  │                                             │ │
+│ • Files  │  │                                             │ │
+│ • Agent  │  │         EDITOR CONTENT AREA                 │ │
+│          │  │         (Tabbed Files)                      │ │
+│          │  │                                             │ │
+│          │  └─────────────────────────────────────────────┘ │
+│  <=>     │  ═════════════════════════════════════════════   │
+│          │  ┌─────────────────────────────────────────────┐ │
+│          │  │ Pulse> _                                    │ │
+│          │  │ TERMINAL OUTPUT                             │ │
+│          │  └─────────────────────────────────────────────┘ │
+└──────────┴──────────────────────────────────────────────────┘
+```
+
+* **Tabbed Editor:**
+    * **Tab 0 (Permanent): "Pulse Chat"**
+      * Non-closable tab for agent interactions
+      * Mode selector (Agent/Plan/Ask)
+      * Chat interface for natural language requests
+      * Displays agent responses, plans, and validation results
+    * **Dynamic File Tabs (Tab 1+):**
+      * Each opened file gets its own tab with close button (×)
+      * Tab header shows filename
+      * Click file in sidebar → opens in new tab (or focuses if already open)
+      * Supports viewing and editing PLC-style (Structured Text) code
+      * Monospaced font, line numbers, syntax highlighting
+      * Changes saved to disk and become context for agents
+
+* **Workspace File Tree (Sidebar):**
+    * Left panel showing workspace folder structure
+    * Click file → opens in editor tab
+    * New files created by Coder Agent appear automatically
+    * Visual indicators for modified files
+
+* **Integrated Terminal (Bottom Panel):**
+    * Black background, monospace font
+    * Terminal prompt (`Pulse> `)
+    * Command history (up/down arrows)
+    * Can run workspace scripts, view logs, etc.
+
+* **Resizable Panels:**
+    * **Vertical splitter:** Drag to resize sidebar ↔ main content area
+    * **Horizontal splitter:** Drag to resize editor ↔ terminal
+    * Splitters have visual affordance (handle/gripper)
+
+* **Agent Panel (Sidebar):**
+    * Mode selector buttons (Agent/Plan/Ask)
+    * Customizer feedback section (star rating + comments)
+    * Plan view for approval workflow
+
 * **Agent-Aware Editing:**
-    * The Coder Agent reads files via the same abstraction the editor uses.
-    * Writes changes that the editor immediately reflects.
-    * Manual user edits are treated as first-class: Subsequent agent runs take the updated file contents as ground truth.
+    * Coder Agent reads files via same abstraction as editor
+    * Writes changes that editor immediately reflects in tabs
+    * Manual user edits are first-class: subsequent agent runs use updated file contents as ground truth
+
 * **Safety:**
-    * All edits (human or agent) are constrained to the configured workspace.
-    * Pulse uses atomic writes when saving from agents to avoid partial-file corruption.
+    * All edits (human or agent) constrained to configured workspace
+    * Atomic writes when saving from agents to avoid partial-file corruption
 
 ### 7.1 Planner Agent (High-Context Task Planner)
 *Purpose: Turn a user’s request into a concrete, step-by-step implementation plan.*
@@ -259,28 +330,55 @@ At a high level:
 
 ### 9.1 Technical Stack
 * **Language:** Python 3.x
-* **UI:** Flet (Python-driven, modern desktop UI)
-* **Editor:** Flet-based embedded code editor component (single-file editing with basic features; no full language server in MVP).
-* **Orchestration:** LangGraph (multi-agent graph and state management)
-* **LLM Integration:** Pluggable LLM client (e.g., OpenAI/Anthropic); future support for local models.
+* **UI:** Flet (Python-driven, modern desktop UI with VS Code-style layout)
+* **Editor:** Flet-based tabbed code editor component
+  * Tab 0: Permanent "Pulse Chat" tab
+  * Tabs 1+: Dynamic file tabs with close buttons
+  * Monospaced font, line numbers, syntax highlighting
+* **Terminal:** Flet-based integrated terminal panel
+* **Orchestration:**
+  * **LangGraph:** High-level multi-agent workflow and state management
+  * **CrewAI/Autogen:** Agent implementation detail inside LangGraph nodes for complex sub-task execution
+  * **Pattern:** LangGraph orchestrates workflow; CrewAI/Autogen handles node implementation
+* **LLM Integration:**
+  * Primary: OpenAI GPT-4o (for MVP agents)
+  * Pluggable LLM client (future support for Anthropic, local models)
 * **Persistence:**
-    * SQLite for sessions and state.
-    * Chroma (local vector store) for RAG over project content.
-    * JSONL files for feedback logs.
-* **Packaging:** PyInstaller or flet pack for Windows .exe.
-* **CI/CD:** GitHub Actions (Ubuntu for tests, Windows for build).
+    * SQLite for sessions and state
+    * Chroma (local vector store) for RAG over project content
+    * JSONL files for feedback logs
+* **Packaging:** PyInstaller or flet pack for Windows .exe
+* **CI/CD:** GitHub Actions (Ubuntu for tests, Windows for build)
 
 ### 9.2 High-Level Flow
-1. UI receives user input + selected mode.
-2. UI calls `PulseEngine.run(mode, request)` (engine layer).
-3. Engine uses LangGraph to traverse the appropriate agent graph.
-4. Agents call tools (filesystem, RAG, logging) as needed.
-5. Engine returns updated state (plan, changes, tests, answers) to UI.
-6. UI renders updates:
-    * Plan view.
-    * File tree.
-    * Code editor with updated content.
-    * Test panel and feedback prompt.
+1. **User interaction in "Pulse Chat" tab (Tab 0):**
+   * User selects mode (Agent/Plan/Ask) in sidebar
+   * User enters natural language request in Pulse Chat tab
+   * User clicks "Run" or presses Enter
+
+2. **UI → Engine:**
+   * UI calls `PulseEngine.run(mode, request)` with current workspace state
+
+3. **Engine orchestration (LangGraph):**
+   * LangGraph traverses appropriate agent graph based on mode
+   * Each agent node may internally use CrewAI/Autogen for complex sub-tasks
+   * Agents call tools: filesystem (read/write), RAG (query), logging
+
+4. **Engine → UI (State updates):**
+   * Engine returns updated `PulseState` (plan, file changes, test results, answers)
+
+5. **UI rendering updates:**
+   * **Pulse Chat tab:** Display agent responses, plans, validation results
+   * **File tree:** Refresh with new/modified files
+   * **File tabs:** Open modified files in new tabs (or refresh if already open)
+   * **Terminal:** Log agent activity, show command outputs
+   * **Agent panel:** Show feedback prompt (star rating + comments)
+
+6. **User review and iteration:**
+   * User reviews changes in file tabs
+   * User can manually edit code in tabs
+   * User can provide feedback via Agent panel
+   * User can ask follow-up questions in Pulse Chat tab
 
 ---
 
@@ -357,24 +455,58 @@ Ensure every change is:
 ## 12. Success Metrics
 
 ### 12.1 Delivery & Execution
-* **MVP delivery time:** Functional desktop app and CI/CD pipeline within 2.5 days.
-* **CI pipeline health:** ≥ 90% of pushes to main have all checks green.
-* **Automated test coverage (MVP):** Unit tests covering:
-    * Core agent orchestration.
-    * File system operations.
-    * Persistence & logging.
+* **Delivery timeline:** Fully functional IDE with MVP agents within 7 days (~140 hours)
+* **CI pipeline health:** ≥ 90% of pushes to main have all checks green
+* **Automated test coverage:** Unit tests covering:
+    * Core agent orchestration (LangGraph workflows)
+    * File system operations (atomic writes, workspace management)
+    * Persistence & logging (SQLite, JSONL, Chroma)
+    * UI components (tab management, file tree, terminal)
 
-### 12.2 Product Experience (Qualitative for MVP)
+### 12.2 Product Experience (Qualitative)
 A reviewer (e.g., hiring manager) can:
-1. Install Pulse from a GitHub Release .exe.
-2. Open a workspace folder and view/edit code in the embedded editor.
-3. Complete at least one end-to-end flow in each mode:
-    * **Agent Mode:** requirement → code change → test summary → feedback.
-    * **Plan Mode:** requirement → plan review → approved code change.
-    * **Ask Mode:** ask a question → receive explanation referencing code opened in the editor.
-* **Perception:**
-    * “This looks and feels like a real IDE, not a demo script.”
-    * “The deployment and build process is clearly thought-through.”
+
+1. **Install and launch:**
+   * Download and run Pulse .exe from GitHub Release
+   * App launches in < 5 seconds
+
+2. **Experience VS Code-style IDE:**
+   * Open workspace folder
+   * Navigate file tree in left sidebar
+   * Click file → opens in new tab with close button (×)
+   * See permanent "Pulse Chat" tab (Tab 0)
+   * Resize panels by dragging splitters (sidebar, terminal)
+   * View/edit code with syntax highlighting and line numbers
+   * Use integrated terminal at bottom
+
+3. **Complete end-to-end agent flows:**
+   * **Agent Mode:**
+     * Enter request in Pulse Chat tab
+     * Watch plan generation in real-time
+     * See files automatically created/modified and opened in tabs
+     * Review test summary
+     * Provide feedback via Agent panel
+   * **Plan Mode:**
+     * Enter request in Pulse Chat tab
+     * Review step-by-step plan in sidebar
+     * Approve plan
+     * Watch code changes apply
+     * Inspect changes in file tabs
+   * **Ask Mode:**
+     * Ask question about codebase
+     * Receive explanation with file references
+     * Click references to open files in tabs
+
+4. **Manual editing integration:**
+   * Make manual edits to code in tabs
+   * Run agent on same file
+   * Verify agent uses updated content as ground truth
+
+**Perception benchmarks:**
+* "This is a production-quality IDE I would actually use daily"
+* "The tabbed editor and terminal feel as polished as VS Code"
+* "The agent integration is seamless - it enhances my workflow without getting in the way"
+* "The deployment and build process is clearly thought-through"
 
 ### 12.3 Operational Excellence
 * **Build success rate:** ≥ 95% of tagged releases result in a successful .exe build and attached artifact.
@@ -385,14 +517,33 @@ A reviewer (e.g., hiring manager) can:
 ## 13. Risks & Assumptions
 
 **Assumptions**
-* A cloud LLM (OpenAI/Anthropic, etc.) is available for MVP; local models are a future enhancement.
-* User has permission to run local executables and install dependencies.
-* Target PLC use-case can be represented in a simplified Structured Text-like dialect.
+* OpenAI GPT-4o API is available for MVP agent implementation
+* User has valid OpenAI API key configured
+* User has permission to run local executables and install dependencies
+* Target PLC use-case can be represented in a simplified Structured Text-like dialect
+* Flet framework supports required UI features (tabs, terminal, resizable splitters)
 
-**Risks (MVP)**
-* **LLM variability:** Generated code quality may be inconsistent.
-    * *Mitigation:* Keep scope narrow and rely on Tester Agent for basic checks.
-* **User trust:** Engineers may be cautious about letting an AI edit code.
-    * *Mitigation:* Provide Plan Mode and clear visibility into changes via the embedded editor.
-* **Packaging friction:** PyInstaller/flet pack may have edge cases on some Windows setups.
-    * *Mitigation:* Test on at least one clean Windows environment before release.
+**Risks**
+* **UI complexity vs timeline:**
+  * Building VS Code-level IDE in 7 days with Flet is ambitious
+  * *Mitigation:* Focus on core IDE features (tabs, terminal, splitters); defer advanced features (themes, keybindings, extensions)
+
+* **LLM variability:**
+  * GPT-4o may produce inconsistent code quality
+  * *Mitigation:* Use Tester Agent for validation; Plan Mode for human review; CrewAI/Autogen for multi-step refinement
+
+* **CrewAI/Autogen integration:**
+  * Integrating two orchestration frameworks (LangGraph + CrewAI/Autogen) adds complexity
+  * *Mitigation:* Clear separation - LangGraph for workflow, CrewAI/Autogen only inside nodes; keep node interfaces simple
+
+* **User trust:**
+  * Engineers may be cautious about letting AI edit PLC code
+  * *Mitigation:* Provide Plan Mode, clear visibility via tabbed editor, atomic writes, workspace constraints
+
+* **Packaging friction:**
+  * PyInstaller/flet pack may struggle with complex dependencies (LangGraph, CrewAI, Chroma)
+  * *Mitigation:* Test packaging early; consider flet pack (designed for Flet apps); test on clean Windows VM
+
+* **Terminal implementation:**
+  * Building functional terminal in Flet may have limitations
+  * *Mitigation:* Keep terminal simple (command execution + output display); defer advanced features (REPL, shell integration)

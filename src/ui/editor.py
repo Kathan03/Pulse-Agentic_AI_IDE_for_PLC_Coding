@@ -1,0 +1,509 @@
+"""
+Tabbed Editor Manager Component for Pulse IDE.
+
+Provides a VS Code-like tabbed interface for editing multiple files and the agent chat.
+"""
+
+import flet as ft
+from pathlib import Path
+from src.ui.theme import VSCodeColors, Fonts, Spacing, create_logo_image
+from src.ui.log_panel import LogPanel
+
+
+class EditorManager:
+    """
+    Tabbed editor manager component.
+
+    Features:
+    - Tabbed interface for multiple files
+    - Dynamic Pulse Agent tab (opened on demand)
+    - File tabs with close buttons
+    - Welcome screen when no tabs are open
+    """
+
+    def __init__(self, log_panel=None):
+        """
+        Initialize the EditorManager.
+
+        Args:
+            log_panel: Reference to the LogPanel template for creating Pulse Agent tabs
+        """
+        self.log_panel_template = log_panel  # Template for creating new log panels
+        self.tabs_control = None
+        self.welcome_screen = None
+        self.open_files = {}  # Map of file_path -> tab_index
+        self.tab_editors = {}  # Map of tab_index -> editor TextField
+        self.agent_tabs = {}  # Map of tab_index -> log_panel instance
+        self.agent_session_counter = 0  # Counter for agent session numbering
+        self.current_mode = "Agent Mode"  # Track current agent mode
+        self.container = self._build()
+
+    def _build(self):
+        """Build the tabbed editor UI component with VS Code styling."""
+        # Create welcome screen
+        self.welcome_screen = self._create_welcome_screen()
+
+        # Create the tabs control (empty initially)
+        self.tabs_control = ft.Tabs(
+            selected_index=0,
+            animation_duration=200,
+            tabs=[],
+            expand=True,
+            on_change=self._on_tab_changed,
+            indicator_color=VSCodeColors.TAB_ACTIVE_BORDER,
+            label_color=VSCodeColors.TAB_ACTIVE_FOREGROUND,
+            unselected_label_color=VSCodeColors.TAB_INACTIVE_FOREGROUND,
+            visible=False,  # Hidden when no tabs
+        )
+
+        # Container that shows either welcome screen or tabs
+        return ft.Container(
+            content=ft.Stack(
+                controls=[
+                    self.welcome_screen,
+                    self.tabs_control,
+                ],
+            ),
+            expand=True,
+            bgcolor=VSCodeColors.EDITOR_BACKGROUND,
+        )
+
+    def _create_welcome_screen(self):
+        """Create the welcome screen shown when no files are open."""
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Icon(
+                        ft.Icons.DESCRIPTION_OUTLINED,
+                        size=64,
+                        color=VSCodeColors.EDITOR_LINE_NUMBER,
+                    ),
+                    ft.Text(
+                        "Please select a file to view",
+                        size=Fonts.FONT_SIZE_LARGE,
+                        color=VSCodeColors.EDITOR_FOREGROUND,
+                        weight=ft.FontWeight.W_300,
+                    ),
+                    ft.Container(height=20),
+                    ft.Text(
+                        "Open a file from the workspace or start a Pulse Agent session",
+                        size=Fonts.FONT_SIZE_SMALL,
+                        color=VSCodeColors.EDITOR_LINE_NUMBER,
+                        text_align=ft.TextAlign.CENTER,
+                    ),
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                alignment=ft.MainAxisAlignment.CENTER,
+            ),
+            expand=True,
+            bgcolor=VSCodeColors.EDITOR_BACKGROUND,
+        )
+
+    def _update_visibility(self):
+        """Update visibility of welcome screen vs tabs."""
+        has_tabs = len(self.tabs_control.tabs) > 0
+        self.welcome_screen.visible = not has_tabs
+        self.tabs_control.visible = has_tabs
+
+        if self.container.page:
+            self.welcome_screen.update()
+            self.tabs_control.update()
+
+    def get_control(self):
+        """Get the editor manager control for adding to the page."""
+        return self.container
+
+    def open_agent(self, mode="Agent Mode"):
+        """
+        Open a new Pulse Agent tab (supports multiple sessions).
+
+        Args:
+            mode: The agent mode (Agent Mode, Plan Mode, or Ask Mode)
+        """
+        self.current_mode = mode
+        self.agent_session_counter += 1
+
+        # Create a new log panel instance for this session
+        def handle_user_input(text: str):
+            """Handle user input from this agent session."""
+            # TODO: Wire this to agent orchestration engine
+            new_log_panel.add_log(f"User: {text}", "info")
+            new_log_panel.add_log(f"Agent (Session #{self.agent_session_counter}) processing in {mode}...", "agent")
+
+        new_log_panel = LogPanel(on_submit=handle_user_input)
+
+        # Initialize with welcome messages
+        new_log_panel.add_log("Welcome to Pulse IDE - AI-Powered PLC Development", "success")
+        new_log_panel.add_log(f"Current Mode: {mode}", "info")
+        new_log_panel.add_log(f"Session #{self.agent_session_counter}", "info")
+        new_log_panel.add_log("Enter a requirement or question to get started", "info")
+
+        # Create new agent tab with session number
+        session_label = f" (Session {self.agent_session_counter})" if self.agent_session_counter > 1 else ""
+        tab_title = f"Pulse Agent - {mode}{session_label}"
+
+        # Create logo image for tab icon
+        tab_logo = create_logo_image(width=42, height=42)
+
+        # Create close button for this tab
+        # Store log panel reference to find the tab index dynamically
+        def close_this_agent_tab(e):
+            # Find the current index of this agent tab by searching for the log panel
+            for idx, panel in self.agent_tabs.items():
+                if panel == new_log_panel:
+                    self.close_tab_by_index(idx)
+                    break
+
+        close_button = ft.IconButton(
+            icon=ft.Icons.CLOSE,
+            icon_size=18,
+            tooltip="Close tab",
+            on_click=close_this_agent_tab,
+            icon_color=VSCodeColors.TAB_INACTIVE_FOREGROUND,
+            style=ft.ButtonStyle(
+                bgcolor={
+                    ft.ControlState.HOVERED: VSCodeColors.BUTTON_SECONDARY_HOVER,
+                    ft.ControlState.DEFAULT: ft.Colors.TRANSPARENT,
+                },
+                overlay_color=VSCodeColors.ERROR_FOREGROUND,
+            ),
+        )
+
+        # Create tab content with close button
+        tab_content = ft.Stack(
+            controls=[
+                ft.Container(
+                    content=new_log_panel.get_control(),
+                    expand=True,
+                    bgcolor=VSCodeColors.EDITOR_BACKGROUND,
+                    padding=Spacing.PADDING_MEDIUM,
+                ),
+                ft.Container(
+                    content=close_button,
+                    right=10,
+                    top=10,
+                ),
+            ],
+            expand=True,
+        )
+
+        agent_tab = ft.Tab(
+            text=tab_title,
+            icon=tab_logo,
+            content=tab_content,
+        )
+
+        # Add tab at the beginning
+        self.tabs_control.tabs.insert(0, agent_tab)
+        new_tab_index = 0
+
+        # Update all file tab indices (shift them by 1)
+        files_to_update = list(self.open_files.items())
+        for file_path, old_index in files_to_update:
+            self.open_files[file_path] = old_index + 1
+
+        # Update tab_editors indices
+        editors_to_update = list(self.tab_editors.items())
+        self.tab_editors = {}
+        for old_index, editor in editors_to_update:
+            self.tab_editors[old_index + 1] = editor
+
+        # Update agent_tabs indices (shift all existing agent tabs by 1)
+        agent_tabs_to_update = list(self.agent_tabs.items())
+        self.agent_tabs = {}
+        for old_index, log_panel in agent_tabs_to_update:
+            self.agent_tabs[old_index + 1] = log_panel
+        self.agent_tabs[new_tab_index] = new_log_panel  # Add the new one at index 0
+
+        # Switch to new agent tab
+        self.tabs_control.selected_index = 0
+        self._update_visibility()
+
+        if self.tabs_control.page:
+            self.tabs_control.update()
+
+    def open_file(self, file_path: str):
+        """
+        Open a file in a new tab or switch to existing tab.
+
+        Args:
+            file_path: Path to the file to open
+        """
+        # Check if file is already open
+        if file_path in self.open_files:
+            # Switch to existing tab
+            tab_index = self.open_files[file_path]
+            self.tabs_control.selected_index = tab_index
+            self.tabs_control.update()
+            return
+
+        # Read file content
+        try:
+            path = Path(file_path)
+            with open(path, 'r', encoding='utf-8') as f:
+                content = f.read()
+        except Exception as e:
+            print(f"Error reading file {file_path}: {e}")
+            content = f"Error loading file: {str(e)}"
+
+        # Create editor for this file with VS Code styling
+        editor = ft.TextField(
+            value=content,
+            multiline=True,
+            min_lines=20,
+            text_style=ft.TextStyle(font_family=Fonts.MONOSPACE_PRIMARY),
+            expand=True,
+            border=ft.InputBorder.NONE,
+            text_size=Fonts.FONT_SIZE_NORMAL,
+            bgcolor=VSCodeColors.EDITOR_BACKGROUND,
+            color=VSCodeColors.EDITOR_FOREGROUND,
+            cursor_color=VSCodeColors.EDITOR_CURSOR,
+            selection_color=VSCodeColors.EDITOR_SELECTION_BACKGROUND,
+        )
+
+        # Get filename for tab title
+        filename = path.name
+
+        # Determine file icon based on extension
+        icon = self._get_file_icon(path.suffix)
+
+        # Create close button for this file tab
+        # Use the file_path to find and close the tab dynamically
+        def close_this_file_tab(e):
+            # Close by file path ensures we close the correct tab
+            self.close_file(file_path)
+
+        close_button = ft.IconButton(
+            icon=ft.Icons.CLOSE,
+            icon_size=18,
+            tooltip="Close file",
+            on_click=close_this_file_tab,
+            icon_color=VSCodeColors.TAB_INACTIVE_FOREGROUND,
+            style=ft.ButtonStyle(
+                bgcolor={
+                    ft.ControlState.HOVERED: VSCodeColors.BUTTON_SECONDARY_HOVER,
+                    ft.ControlState.DEFAULT: ft.Colors.TRANSPARENT,
+                },
+                overlay_color=VSCodeColors.ERROR_FOREGROUND,
+            ),
+        )
+
+        # Create tab content with close button
+        tab_content = ft.Stack(
+            controls=[
+                ft.Container(
+                    content=editor,
+                    expand=True,
+                    padding=Spacing.PADDING_MEDIUM,
+                    bgcolor=VSCodeColors.EDITOR_BACKGROUND,
+                ),
+                ft.Container(
+                    content=close_button,
+                    right=10,
+                    top=10,
+                ),
+            ],
+            expand=True,
+        )
+
+        # Create the tab with proper content
+        new_tab = ft.Tab(
+            text=filename,
+            icon=icon,
+            content=tab_content,
+        )
+
+        # Add tab to tabs control
+        self.tabs_control.tabs.append(new_tab)
+        tab_index = len(self.tabs_control.tabs) - 1
+
+        # Track the file and editor
+        self.open_files[file_path] = tab_index
+        self.tab_editors[tab_index] = editor
+
+        # Switch to the new tab
+        self.tabs_control.selected_index = tab_index
+
+        # Update visibility
+        self._update_visibility()
+
+        # Update UI
+        if self.tabs_control.page:
+            self.tabs_control.update()
+
+    def _close_file_click(self, e, file_path):
+        """Handle close button click on file tab."""
+        e.control.page.overlay.append(
+            ft.SnackBar(
+                content=ft.Text(f"Tab close functionality: Use Ctrl+W or right-click menu"),
+                action="OK",
+            )
+        )
+        # For now, just close the file
+        self.close_file(file_path)
+
+    def close_file(self, file_path: str):
+        """
+        Close a file tab.
+
+        Args:
+            file_path: Path to the file to close
+        """
+        if file_path not in self.open_files:
+            return
+
+        tab_index = self.open_files[file_path]
+
+        # Remove the tab
+        del self.tabs_control.tabs[tab_index]
+
+        # Remove from tracking
+        del self.open_files[file_path]
+        if tab_index in self.tab_editors:
+            del self.tab_editors[tab_index]
+
+        # Update indices for files that were after this one
+        files_to_update = [(fp, idx) for fp, idx in self.open_files.items() if idx > tab_index]
+        for fp, idx in files_to_update:
+            self.open_files[fp] = idx - 1
+
+        # Update tab_editors indices
+        editors_to_update = [(idx, editor) for idx, editor in self.tab_editors.items() if idx > tab_index]
+        for idx, editor in editors_to_update:
+            del self.tab_editors[idx]
+            self.tab_editors[idx - 1] = editor
+
+        # Update agent_tabs indices
+        agent_tabs_to_update = [(idx, log_panel) for idx, log_panel in self.agent_tabs.items() if idx > tab_index]
+        for idx, log_panel in agent_tabs_to_update:
+            del self.agent_tabs[idx]
+            self.agent_tabs[idx - 1] = log_panel
+
+        # Switch to previous tab or first tab
+        if self.tabs_control.selected_index >= len(self.tabs_control.tabs):
+            self.tabs_control.selected_index = max(0, len(self.tabs_control.tabs) - 1)
+
+        # Update visibility
+        self._update_visibility()
+
+        # Update UI
+        if self.tabs_control.page:
+            self.tabs_control.update()
+
+    def close_tab_by_index(self, tab_index: int):
+        """
+        Close a tab by its index (works for both file tabs and agent tabs).
+
+        Args:
+            tab_index: Index of the tab to close
+        """
+        # Check if this is an agent tab
+        if tab_index in self.agent_tabs:
+            # Remove agent tab
+            del self.tabs_control.tabs[tab_index]
+            del self.agent_tabs[tab_index]
+
+            # Update all indices that come after this tab
+            files_to_update = [(fp, idx) for fp, idx in self.open_files.items() if idx > tab_index]
+            for fp, idx in files_to_update:
+                self.open_files[fp] = idx - 1
+
+            editors_to_update = [(idx, editor) for idx, editor in self.tab_editors.items() if idx > tab_index]
+            for idx, editor in editors_to_update:
+                del self.tab_editors[idx]
+                self.tab_editors[idx - 1] = editor
+
+            agent_tabs_to_update = [(idx, log_panel) for idx, log_panel in self.agent_tabs.items() if idx > tab_index]
+            for idx, log_panel in agent_tabs_to_update:
+                del self.agent_tabs[idx]
+                self.agent_tabs[idx - 1] = log_panel
+
+            # Update visibility and UI
+            if self.tabs_control.selected_index >= len(self.tabs_control.tabs):
+                self.tabs_control.selected_index = max(0, len(self.tabs_control.tabs) - 1)
+
+            self._update_visibility()
+            if self.tabs_control.page:
+                self.tabs_control.update()
+            return
+
+        # Find the file path for this tab index
+        file_path = None
+        for fp, idx in self.open_files.items():
+            if idx == tab_index:
+                file_path = fp
+                break
+
+        if file_path:
+            self.close_file(file_path)
+
+    def _on_tab_changed(self, e):
+        """Handle tab change event."""
+        # Optional: Add logic when switching tabs
+        pass
+
+    def get_current_file_content(self):
+        """
+        Get the content of the currently active file.
+
+        Returns:
+            Content of the current file, or None if on Pulse Agent tab or no tab
+        """
+        current_index = self.tabs_control.selected_index
+
+        # Skip if this is an agent tab
+        if current_index in self.agent_tabs:
+            return None
+
+        if current_index in self.tab_editors:
+            return self.tab_editors[current_index].value
+
+        return None
+
+    def save_current_file(self):
+        """Save the currently active file."""
+        current_index = self.tabs_control.selected_index
+
+        # Skip if this is an agent tab
+        if current_index in self.agent_tabs:
+            return
+
+        # Find the file path for this tab
+        file_path = None
+        for fp, idx in self.open_files.items():
+            if idx == current_index:
+                file_path = fp
+                break
+
+        if not file_path or current_index not in self.tab_editors:
+            return
+
+        # Get content and save
+        content = self.tab_editors[current_index].value
+
+        try:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            print(f"Saved: {file_path}")
+        except Exception as e:
+            print(f"Error saving file {file_path}: {e}")
+
+    def _get_file_icon(self, extension: str):
+        """
+        Get appropriate icon for file type.
+
+        Args:
+            extension: File extension (e.g., '.py', '.st')
+
+        Returns:
+            Flet icon constant
+        """
+        icon_map = {
+            '.st': ft.Icons.CODE,           # PLC Structured Text
+            '.py': ft.Icons.CODE,           # Python
+            '.md': ft.Icons.DESCRIPTION,    # Markdown
+            '.txt': ft.Icons.TEXT_SNIPPET,  # Text
+            '.json': ft.Icons.DATA_OBJECT,  # JSON
+        }
+
+        return icon_map.get(extension.lower(), ft.Icons.INSERT_DRIVE_FILE)
