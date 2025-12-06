@@ -21,15 +21,17 @@ class EditorManager:
     - Welcome screen when no tabs are open
     """
 
-    def __init__(self, log_panel=None, dirty_callback=None):
+    def __init__(self, log_panel=None, file_manager=None, dirty_callback=None):
         """
         Initialize the EditorManager.
 
         Args:
             log_panel: Reference to the LogPanel template for creating Pulse Agent tabs
+            file_manager: Reference to FileManager for secure file operations
             dirty_callback: Callback function (file_path, is_dirty) to notify sidebar of dirty state
         """
         self.log_panel_template = log_panel  # Template for creating new log panels
+        self.file_manager = file_manager
         self.tabs_control = None
         self.welcome_screen = None
         self.open_files = {}  # Map of file_path -> tab_index
@@ -241,11 +243,16 @@ class EditorManager:
             self.tabs_control.update()
             return
 
-        # Read file content
+        # Read file content using FileManager
         try:
             path = Path(file_path)
-            with open(path, 'r', encoding='utf-8') as f:
-                content = f.read()
+            if self.file_manager:
+                # Use FileManager for secure, validated file reads
+                content = self.file_manager.read_file(str(path))
+            else:
+                # Fallback to direct file I/O if FileManager not available
+                with open(path, 'r', encoding='utf-8') as f:
+                    content = f.read()
         except Exception as e:
             print(f"Error reading file {file_path}: {e}")
             content = f"Error loading file: {str(e)}"
@@ -576,12 +583,17 @@ class EditorManager:
         if not file_path or current_index not in self.tab_editors:
             return
 
-        # Get content and save
+        # Get content and save using FileManager
         content = self.tab_editors[current_index].value
 
         try:
-            with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(content)
+            if self.file_manager:
+                # Use FileManager for atomic, secure writes
+                self.file_manager.write_file(file_path, content)
+            else:
+                # Fallback to direct file I/O if FileManager not available
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(content)
             print(f"Saved: {file_path}")
 
             # Update the original content to the newly saved content

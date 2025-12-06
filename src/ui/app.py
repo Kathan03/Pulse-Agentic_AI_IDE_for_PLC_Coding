@@ -11,6 +11,7 @@ from src.ui.terminal import TerminalPanel
 from src.ui.status_bar import StatusBar
 from src.ui.components.resizable_splitter import VerticalSplitter, HorizontalSplitter
 from src.ui.theme import VSCodeColors, Spacing
+from src.core.file_manager import FileManager
 
 
 def main(page: ft.Page):
@@ -38,6 +39,14 @@ def main(page: ft.Page):
     # Get workspace path
     workspace_path = str(Path.cwd())
 
+    # Initialize FileManager for secure file operations
+    try:
+        file_manager = FileManager(base_path=workspace_path)
+    except ValueError as e:
+        print(f"Error initializing FileManager: {e}")
+        # Fallback to current directory if workspace path is invalid
+        file_manager = FileManager(base_path=".")
+
     # Create status bar (created first so it can be referenced by sidebar)
     status_bar = StatusBar(mode="Agent Mode", workspace_path=workspace_path)
 
@@ -51,15 +60,19 @@ def main(page: ft.Page):
     log_panel = LogPanel(on_submit=handle_user_input)
 
     # Create sidebar first (needed for dirty state callback)
-    sidebar = Sidebar(editor_manager=None)
+    sidebar = Sidebar(editor_manager=None, file_manager=file_manager)
 
     # Create dirty state callback that updates sidebar
     def handle_file_dirty_state(file_path: str, is_dirty: bool):
         """Handle file dirty state changes and update sidebar."""
         sidebar.set_file_dirty(file_path, is_dirty)
 
-    # Create editor manager with log panel and dirty state callback
-    editor_manager = EditorManager(log_panel=log_panel, dirty_callback=handle_file_dirty_state)
+    # Create editor manager with log panel, file manager, and dirty state callback
+    editor_manager = EditorManager(
+        log_panel=log_panel,
+        file_manager=file_manager,
+        dirty_callback=handle_file_dirty_state
+    )
 
     # Wire editor manager to sidebar (for file opening)
     sidebar.editor_manager = editor_manager

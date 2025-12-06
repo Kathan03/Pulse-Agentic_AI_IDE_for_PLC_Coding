@@ -2,6 +2,7 @@
 
 ## CORE CONSTRAINTS (Strict Adherence Required)
 
+
 1. **Platform:** Windows Desktop Application (Local-first).
 2. **UI Framework:** Python + Flet (No web frameworks like React/Vue).
 3. **Orchestration:** LangGraph (multi-agent graph) + CrewAI/Autogen (node implementation).

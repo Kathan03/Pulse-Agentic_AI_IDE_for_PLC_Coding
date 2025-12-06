@@ -20,14 +20,16 @@ class Sidebar:
     # Configuration file path for storing recent workspaces
     CONFIG_FILE = Path("data") / "workspace_config.json"
 
-    def __init__(self, editor_manager=None):
+    def __init__(self, editor_manager=None, file_manager=None):
         """
         Initialize the Sidebar component.
 
         Args:
             editor_manager: Reference to EditorManager for opening files in tabs
+            file_manager: Reference to FileManager for secure file operations
         """
         self.editor_manager = editor_manager
+        self.file_manager = file_manager
         self.current_path = None
         self.workspace_root = None  # Store the workspace root directory
         self.recent_workspaces = []  # List of recently opened workspace paths
@@ -594,6 +596,8 @@ class Sidebar:
         """
         try:
             if self.CONFIG_FILE.exists():
+                # Note: Config file is in data/ directory, which may be outside workspace
+                # Use standard file operations for config file (not FileManager)
                 with open(self.CONFIG_FILE, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     self.recent_workspaces = data.get('recent_workspaces', [])
@@ -616,7 +620,8 @@ class Sidebar:
             # Ensure the data directory exists
             self.CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-            # Save to JSON file
+            # Note: Config file is in data/ directory, which may be outside workspace
+            # Use standard file operations for config file (not FileManager)
             with open(self.CONFIG_FILE, 'w', encoding='utf-8') as f:
                 json.dump(
                     {
