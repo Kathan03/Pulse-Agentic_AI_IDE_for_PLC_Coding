@@ -34,60 +34,42 @@ class StatusBar:
         self.container = self._build()
 
     def _build(self):
-        """Build the status bar UI component with VS Code styling."""
+        """Build the status bar UI component with dark theme styling."""
         # Mode indicator
         self.mode_text = ft.Text(
             self._format_mode(self.current_mode),
             size=Fonts.FONT_SIZE_SMALL,
-            color=VSCodeColors.STATUS_BAR_FOREGROUND,
-            weight=ft.FontWeight.BOLD,
+            color="#FFFFFF",
+            weight=ft.FontWeight.W_500,
         )
 
         # Workspace path
         self.workspace_text = ft.Text(
             self._format_workspace(self.workspace_path),
             size=Fonts.FONT_SIZE_SMALL,
-            color=VSCodeColors.STATUS_BAR_FOREGROUND,
+            color="#CCCCCC",
         )
 
-        # Status bar container
+        # Status bar container with darker theme - Simple centered "Powered by AI"
         return ft.Container(
-            bgcolor=VSCodeColors.STATUS_BAR_BACKGROUND,
-            padding=ft.padding.symmetric(horizontal=Spacing.PADDING_MEDIUM, vertical=Spacing.PADDING_SMALL),
+            bgcolor="#1E1E1E",  # Darker background matching editor theme
+            padding=ft.padding.symmetric(horizontal=Spacing.PADDING_MEDIUM, vertical=8),
             content=ft.Row(
                 controls=[
-                    # Left side - Mode indicator
-                    ft.Container(
-                        content=ft.Row(
-                            controls=[
-                                ft.Icon(
-                                    ft.Icons.SETTINGS,
-                                    size=14,
-                                    color=VSCodeColors.STATUS_BAR_FOREGROUND,
-                                ),
-                                self.mode_text,
-                            ],
-                            spacing=Spacing.PADDING_SMALL,
-                        ),
+                    ft.Icon(
+                        ft.Icons.AUTO_AWESOME,
+                        size=16,
+                        color="#61DAFB",
                     ),
-                    # Spacer
-                    ft.Container(expand=True),
-                    # Right side - Workspace path
-                    ft.Container(
-                        content=ft.Row(
-                            controls=[
-                                ft.Icon(
-                                    ft.Icons.FOLDER,
-                                    size=14,
-                                    color=VSCodeColors.STATUS_BAR_FOREGROUND,
-                                ),
-                                self.workspace_text,
-                            ],
-                            spacing=Spacing.PADDING_SMALL,
-                        ),
+                    ft.Text(
+                        "Powered by AI",
+                        size=Fonts.FONT_SIZE_SMALL,
+                        color="#CCCCCC",
+                        italic=True,
                     ),
                 ],
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                spacing=6,
+                alignment=ft.MainAxisAlignment.CENTER,
             ),
         )
 

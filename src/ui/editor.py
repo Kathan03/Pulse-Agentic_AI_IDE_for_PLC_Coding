@@ -21,12 +21,13 @@ class EditorManager:
     - Welcome screen when no tabs are open
     """
 
-    def __init__(self, log_panel=None):
+    def __init__(self, log_panel=None, dirty_callback=None):
         """
         Initialize the EditorManager.
 
         Args:
             log_panel: Reference to the LogPanel template for creating Pulse Agent tabs
+            dirty_callback: Callback function (file_path, is_dirty) to notify sidebar of dirty state
         """
         self.log_panel_template = log_panel  # Template for creating new log panels
         self.tabs_control = None
@@ -36,6 +37,9 @@ class EditorManager:
         self.agent_tabs = {}  # Map of tab_index -> log_panel instance
         self.agent_session_counter = 0  # Counter for agent session numbering
         self.current_mode = "Agent Mode"  # Track current agent mode
+        self.dirty_files = set()  # Set of file paths with unsaved changes
+        self.dirty_callback = dirty_callback  # Callback to notify sidebar of dirty state
+        self.original_contents = {}  # Map of file_path -> original content for dirty tracking
         self.container = self._build()
 
     def _build(self):
@@ -246,6 +250,20 @@ class EditorManager:
             print(f"Error reading file {file_path}: {e}")
             content = f"Error loading file: {str(e)}"
 
+        # Store original content for dirty state tracking
+        normalized_path = str(path.resolve())
+        self.original_contents[normalized_path] = content
+
+        # Create onChange handler for dirty state tracking
+        def on_text_changed(e):
+            """Handle text changes in the editor to track dirty state."""
+            current_content = e.control.value
+            # Mark as dirty if content has changed from original
+            if current_content != self.original_contents.get(normalized_path, ""):
+                self._mark_file_dirty(file_path, True)
+            else:
+                self._mark_file_dirty(file_path, False)
+
         # Create editor for this file with VS Code styling
         editor = ft.TextField(
             value=content,
@@ -259,6 +277,8 @@ class EditorManager:
             color=VSCodeColors.EDITOR_FOREGROUND,
             cursor_color=VSCodeColors.EDITOR_CURSOR,
             selection_color=VSCodeColors.EDITOR_SELECTION_BACKGROUND,
+            on_change=on_text_changed,
+            on_submit=lambda _: None,  # Handle Enter key (no-op for multiline)
         )
 
         # Get filename for tab title
@@ -352,7 +372,38 @@ class EditorManager:
         if file_path not in self.open_files:
             return
 
+        # Check if file is dirty (has unsaved changes)
+        normalized_path = str(Path(file_path).resolve())
+        if normalized_path in self.dirty_files:
+            # Show confirmation dialog
+            filename = Path(file_path).name
+            self._show_unsaved_changes_dialog(file_path, filename)
+            return
+
+        # Proceed with closing
+        self._perform_close(file_path)
+
+    def _perform_close(self, file_path: str):
+        """
+        Actually perform the file close operation.
+
+        Args:
+            file_path: Path to the file to close
+        """
+        if file_path not in self.open_files:
+            return
+
         tab_index = self.open_files[file_path]
+
+        # Clear dirty state
+        normalized_path = str(Path(file_path).resolve())
+        self.dirty_files.discard(normalized_path)
+        if normalized_path in self.original_contents:
+            del self.original_contents[normalized_path]
+
+        # Notify sidebar to clear dirty indicator
+        if self.dirty_callback:
+            self.dirty_callback(normalized_path, False)
 
         # Remove the tab
         del self.tabs_control.tabs[tab_index]
@@ -389,6 +440,53 @@ class EditorManager:
         # Update UI
         if self.tabs_control.page:
             self.tabs_control.update()
+
+    def _show_unsaved_changes_dialog(self, file_path: str, filename: str):
+        """
+        Show a confirmation dialog for unsaved changes.
+
+        Args:
+            file_path: Path to the file
+            filename: Name of the file to display
+        """
+        def handle_save(e):
+            # Save the file
+            self.save_current_file()
+            # Close the dialog
+            dialog.open = False
+            dialog.page.update()
+            # Close the file
+            self._perform_close(file_path)
+
+        def handle_dont_save(e):
+            # Close the dialog
+            dialog.open = False
+            dialog.page.update()
+            # Close the file without saving
+            self._perform_close(file_path)
+
+        def handle_cancel(e):
+            # Just close the dialog
+            dialog.open = False
+            dialog.page.update()
+
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Unsaved Changes"),
+            content=ft.Text(f"Do you want to save the changes to '{filename}'?"),
+            actions=[
+                ft.TextButton("Save", on_click=handle_save),
+                ft.TextButton("Don't Save", on_click=handle_dont_save),
+                ft.TextButton("Cancel", on_click=handle_cancel),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+
+        # Add dialog to page overlay and show it
+        if self.container.page:
+            self.container.page.overlay.append(dialog)
+            dialog.open = True
+            self.container.page.update()
 
     def close_tab_by_index(self, tab_index: int):
         """
@@ -485,8 +583,71 @@ class EditorManager:
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(content)
             print(f"Saved: {file_path}")
+
+            # Update the original content to the newly saved content
+            normalized_path = str(Path(file_path).resolve())
+            self.original_contents[normalized_path] = content
+
+            # Mark file as clean after successful save
+            self._mark_file_dirty(file_path, False)
         except Exception as e:
             print(f"Error saving file {file_path}: {e}")
+
+    def _mark_file_dirty(self, file_path: str, is_dirty: bool):
+        """
+        Mark a file as dirty (unsaved changes) or clean.
+
+        Args:
+            file_path: Path to the file
+            is_dirty: True to mark as dirty, False to mark as clean
+        """
+        # Normalize the file path
+        normalized_path = str(Path(file_path).resolve())
+
+        # Update dirty_files set
+        if is_dirty:
+            self.dirty_files.add(normalized_path)
+        else:
+            self.dirty_files.discard(normalized_path)
+
+        # Update tab title
+        self._update_tab_title(normalized_path, is_dirty)
+
+        # Notify sidebar via callback
+        if self.dirty_callback:
+            self.dirty_callback(normalized_path, is_dirty)
+
+    def _update_tab_title(self, file_path: str, is_dirty: bool):
+        """
+        Update the tab title to show dirty state (with asterisk).
+
+        Args:
+            file_path: Path to the file
+            is_dirty: True to add asterisk, False to remove it
+        """
+        # Find the tab index for this file
+        if file_path not in self.open_files:
+            return
+
+        tab_index = self.open_files[file_path]
+        if tab_index >= len(self.tabs_control.tabs):
+            return
+
+        # Get the tab
+        tab = self.tabs_control.tabs[tab_index]
+
+        # Get the filename from the path
+        filename = Path(file_path).name
+
+        # Update the tab text
+        if is_dirty:
+            tab.text = f"{filename} *"
+        else:
+            tab.text = filename
+
+        # Update UI if page is available
+        if self.tabs_control.page:
+            self.tabs_control.update()
 
     def _get_file_icon(self, extension: str):
         """

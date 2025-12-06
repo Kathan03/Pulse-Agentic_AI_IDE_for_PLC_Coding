@@ -50,11 +50,19 @@ def main(page: ft.Page):
 
     log_panel = LogPanel(on_submit=handle_user_input)
 
-    # Create editor manager with log panel for Pulse Chat tab
-    editor_manager = EditorManager(log_panel=log_panel)
+    # Create sidebar first (needed for dirty state callback)
+    sidebar = Sidebar(editor_manager=None)
 
-    # Create sidebar with editor manager reference for file opening
-    sidebar = Sidebar(editor_manager=editor_manager)
+    # Create dirty state callback that updates sidebar
+    def handle_file_dirty_state(file_path: str, is_dirty: bool):
+        """Handle file dirty state changes and update sidebar."""
+        sidebar.set_file_dirty(file_path, is_dirty)
+
+    # Create editor manager with log panel and dirty state callback
+    editor_manager = EditorManager(log_panel=log_panel, dirty_callback=handle_file_dirty_state)
+
+    # Wire editor manager to sidebar (for file opening)
+    sidebar.editor_manager = editor_manager
 
     # Override sidebar's mode change handler to update status bar and agent tab
     original_on_mode_changed = sidebar._on_mode_changed
@@ -144,6 +152,21 @@ def main(page: ft.Page):
         spacing=0,
         expand=True,
     )
+
+    # Setup keyboard event handler for Ctrl+S (Save)
+    def on_keyboard_event(e: ft.KeyboardEvent):
+        """Handle keyboard shortcuts."""
+        # Debug: Print the key being pressed
+        print(f"Key pressed: {e.key}, Ctrl: {e.ctrl}, Alt: {e.alt}, Shift: {e.shift}, Meta: {e.meta}")
+
+        # Check for Ctrl+S (or Cmd+S on Mac) - try both lowercase and uppercase
+        if (e.key.lower() == "s" or e.key == "S") and (e.ctrl or e.meta):
+            print("Ctrl+S detected! Saving file...")
+            # Save the current file
+            editor_manager.save_current_file()
+            e.page.update()
+
+    page.on_keyboard_event = on_keyboard_event
 
     # Add layout to page
     page.add(complete_layout)

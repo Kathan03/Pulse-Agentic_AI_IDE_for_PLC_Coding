@@ -34,6 +34,7 @@ class Sidebar:
         self.file_picker = None  # Will be initialized when page is available
         self.current_mode = "Agent Mode"  # Default mode
         self.feedback_field = None  # Reference to feedback TextField
+        self.file_controls = {}  # Dictionary to track file TextButton controls by path
 
         # Load recent workspaces from config file
         self._load_workspaces_from_config()
@@ -159,16 +160,18 @@ class Sidebar:
             padding=Spacing.PADDING_MEDIUM,
             content=ft.Column(
                 controls=[
-                    # Header with workspace label
+                    # Header with logo and workspace label
                     ft.Row(
                         controls=[
+                            create_logo_image(width=28, height=28),
                             ft.Text(
                                 "PULSE IDE",
-                                size=Fonts.FONT_SIZE_NORMAL,
+                                size=Fonts.FONT_SIZE_NORMAL + 1,
                                 weight=ft.FontWeight.BOLD,
                                 color=VSCodeColors.SIDEBAR_TITLE_FOREGROUND
                             ),
                         ],
+                        spacing=Spacing.PADDING_SMALL,
                         alignment=ft.MainAxisAlignment.START
                     ),
                     ft.Divider(height=1, color=VSCodeColors.SIDEBAR_BORDER),
@@ -317,8 +320,9 @@ class Sidebar:
             # Home button is enabled if we're not at workspace root
             self.home_button.disabled = (directory == self.workspace_root)
 
-            # Clear existing file list
+            # Clear existing file list and file controls dictionary
             self.file_list_column.controls.clear()
+            self.file_controls.clear()
 
             # Get all files and directories
             items = []
@@ -372,6 +376,10 @@ class Sidebar:
                         ),
                         on_click=lambda e, path=item: self.on_item_click(path)
                     )
+
+                    # Store reference to file controls for dirty state tracking (files only, not directories)
+                    if item.is_file():
+                        self.file_controls[str(item.resolve())] = file_button
 
                     self.file_list_column.controls.append(file_button)
 
@@ -620,3 +628,40 @@ class Sidebar:
                 )
         except Exception as e:
             print(f"Error saving workspace config: {e}")
+
+    def set_file_dirty(self, file_path: str, is_dirty: bool):
+        """
+        Mark a file as dirty (unsaved changes) or clean in the sidebar.
+
+        Args:
+            file_path: Absolute path to the file
+            is_dirty: True to mark as dirty (append *), False to mark as clean (remove *)
+        """
+        # Normalize the file path
+        normalized_path = str(Path(file_path).resolve())
+
+        # Find the control for this file
+        if normalized_path in self.file_controls:
+            file_button = self.file_controls[normalized_path]
+            current_text = file_button.text
+
+            # Get the filename (extract from the current text)
+            # Format is: "icon filename" or "icon filename *"
+            # Split by space and handle icon + filename
+            parts = current_text.split(" ")
+            if len(parts) >= 2:
+                icon = parts[0]
+                filename_parts = parts[1:]
+                filename = " ".join(filename_parts).replace(" *", "").strip()
+
+                # Update the text based on dirty state
+                if is_dirty:
+                    new_text = f"{icon} {filename} *"
+                else:
+                    new_text = f"{icon} {filename}"
+
+                file_button.text = new_text
+
+                # Update UI if page is available
+                if file_button.page:
+                    file_button.update()
