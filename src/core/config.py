@@ -26,7 +26,7 @@ class Config:
 
     # OpenAI Configuration
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-    OPENAI_MODEL_NAME: str = os.getenv("OPENAI_MODEL_NAME", "gpt-4o")
+    OPENAI_MODEL_NAME: str = os.getenv("OPENAI_MODEL_NAME", "gpt-5-nano")
 
     # Optional: Anthropic Configuration (for future multi-provider support)
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
