@@ -9,6 +9,89 @@ import flet as ft
 from src.ui.theme import VSCodeColors, Fonts, Spacing, create_logo_image
 
 
+def get_file_icon(suffix: str) -> tuple[str, str]:
+    """
+    Get the appropriate icon and color for a file based on its extension.
+
+    Args:
+        suffix: File extension (e.g., '.py', '.st')
+
+    Returns:
+        Tuple of (icon_name, color_hex)
+    """
+    FILE_ICONS = {
+        # PLC / Industrial
+        '.st': (ft.Icons.CODE, "#98C379"),          # Structured Text - Green
+        '.scl': (ft.Icons.CODE, "#98C379"),         # SCL (Siemens) - Green
+        '.awl': (ft.Icons.CODE, "#98C379"),         # AWL/STL - Green
+
+        # Programming Languages
+        '.py': (ft.Icons.CODE, "#FFD700"),          # Python - Gold
+        '.js': (ft.Icons.JAVASCRIPT, "#F7DF1E"),    # JavaScript - Yellow
+        '.ts': (ft.Icons.CODE, "#3178C6"),          # TypeScript - Blue
+        '.jsx': (ft.Icons.JAVASCRIPT, "#61DAFB"),   # React JSX - Cyan
+        '.tsx': (ft.Icons.CODE, "#61DAFB"),         # React TSX - Cyan
+        '.java': (ft.Icons.CODE, "#ED8B00"),        # Java - Orange
+        '.c': (ft.Icons.CODE, "#A8B9CC"),           # C - Light Blue
+        '.cpp': (ft.Icons.CODE, "#00599C"),         # C++ - Blue
+        '.h': (ft.Icons.CODE, "#A8B9CC"),           # Header - Light Blue
+        '.cs': (ft.Icons.CODE, "#68217A"),          # C# - Purple
+        '.go': (ft.Icons.CODE, "#00ADD8"),          # Go - Cyan
+        '.rs': (ft.Icons.CODE, "#DEA584"),          # Rust - Orange
+        '.rb': (ft.Icons.CODE, "#CC342D"),          # Ruby - Red
+        '.php': (ft.Icons.CODE, "#777BB4"),         # PHP - Purple
+
+        # Web / Markup
+        '.html': (ft.Icons.HTML, "#E34F26"),        # HTML - Orange
+        '.css': (ft.Icons.CSS, "#1572B6"),          # CSS - Blue
+        '.scss': (ft.Icons.CSS, "#CC6699"),         # SCSS - Pink
+        '.sass': (ft.Icons.CSS, "#CC6699"),         # Sass - Pink
+        '.vue': (ft.Icons.CODE, "#4FC08D"),         # Vue - Green
+        '.svelte': (ft.Icons.CODE, "#FF3E00"),      # Svelte - Orange
+
+        # Data / Config
+        '.json': (ft.Icons.DATA_OBJECT, "#CBCB41"), # JSON - Yellow
+        '.yaml': (ft.Icons.SETTINGS, "#CB171E"),    # YAML - Red
+        '.yml': (ft.Icons.SETTINGS, "#CB171E"),     # YML - Red
+        '.xml': (ft.Icons.CODE, "#E37933"),         # XML - Orange
+        '.toml': (ft.Icons.SETTINGS, "#9C4121"),    # TOML - Brown
+        '.ini': (ft.Icons.SETTINGS, "#AAAAAA"),     # INI - Gray
+        '.env': (ft.Icons.LOCK, "#ECD53F"),         # Env - Yellow
+
+        # Documentation
+        '.md': (ft.Icons.DESCRIPTION, "#519ABA"),   # Markdown - Blue
+        '.txt': (ft.Icons.DESCRIPTION, "#AAAAAA"),  # Text - Gray
+        '.rst': (ft.Icons.DESCRIPTION, "#519ABA"),  # reStructuredText - Blue
+        '.pdf': (ft.Icons.PICTURE_AS_PDF, "#FF0000"), # PDF - Red
+
+        # Shell / Scripts
+        '.sh': (ft.Icons.TERMINAL, "#89E051"),      # Shell - Green
+        '.bash': (ft.Icons.TERMINAL, "#89E051"),    # Bash - Green
+        '.zsh': (ft.Icons.TERMINAL, "#89E051"),     # Zsh - Green
+        '.ps1': (ft.Icons.TERMINAL, "#012456"),     # PowerShell - Blue
+        '.bat': (ft.Icons.TERMINAL, "#C1F12E"),     # Batch - Yellow-Green
+        '.cmd': (ft.Icons.TERMINAL, "#C1F12E"),     # CMD - Yellow-Green
+
+        # Images
+        '.png': (ft.Icons.IMAGE, "#A074C4"),        # PNG - Purple
+        '.jpg': (ft.Icons.IMAGE, "#A074C4"),        # JPG - Purple
+        '.jpeg': (ft.Icons.IMAGE, "#A074C4"),       # JPEG - Purple
+        '.gif': (ft.Icons.IMAGE, "#A074C4"),        # GIF - Purple
+        '.svg': (ft.Icons.IMAGE, "#FFB13B"),        # SVG - Orange
+        '.ico': (ft.Icons.IMAGE, "#A074C4"),        # Icon - Purple
+
+        # Other
+        '.sql': (ft.Icons.STORAGE, "#E38C00"),      # SQL - Orange
+        '.db': (ft.Icons.STORAGE, "#E38C00"),       # Database - Orange
+        '.sqlite': (ft.Icons.STORAGE, "#E38C00"),   # SQLite - Orange
+        '.log': (ft.Icons.ARTICLE, "#AAAAAA"),      # Log - Gray
+        '.lock': (ft.Icons.LOCK, "#AAAAAA"),        # Lock - Gray
+        '.gitignore': (ft.Icons.SETTINGS, "#F05032"), # Git - Orange
+    }
+
+    return FILE_ICONS.get(suffix.lower(), (ft.Icons.INSERT_DRIVE_FILE, "#CCCCCC"))
+
+
 class Sidebar:
     """
     Sidebar component for Pulse IDE.
@@ -98,6 +181,7 @@ class Sidebar:
         # Build the main container with two sections (PULSE AGENT + File Tree only)
         self.container = ft.Container(
             width=250,
+            expand=True,  # Enable vertical expansion for scrolling
             bgcolor=VSCodeColors.SIDEBAR_BACKGROUND,
             padding=Spacing.PADDING_MEDIUM,
             content=ft.Column(
@@ -227,20 +311,8 @@ class Sidebar:
                     maintain_state=True,
                 )
             else:
-                # Build file with TextButton
-                # Determine icon and color based on file type
-                if item_path.suffix == '.st':
-                    icon = ft.Icons.CODE
-                    color = "#98C379"  # Green for PLC files
-                elif item_path.suffix == '.py':
-                    icon = ft.Icons.CODE
-                    color = "#FFD700"  # Gold for Python
-                elif item_path.suffix in ['.md', '.txt']:
-                    icon = ft.Icons.DESCRIPTION
-                    color = "#AAAAAA"
-                else:
-                    icon = ft.Icons.INSERT_DRIVE_FILE
-                    color = "#CCCCCC"
+                # Build file with appropriate icon using helper function
+                icon, color = get_file_icon(item_path.suffix)
 
                 # Create file button - ABSOLUTE MINIMAL spacing, LEFT aligned
                 file_button = ft.Container(

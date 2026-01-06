@@ -42,17 +42,21 @@ class VibeCategory(str, Enum):
     ACTION = "action"
 
 
-# Vibe words by category (from CLAUDE.md)
+# Vibe words by category (F2 Enhancement: expanded Claude-style words)
 VIBE_WORDS = {
     VibeCategory.THINKING: [
-        "Wondering", "Stewing", "Cogitating", "Hoping", "Exploring", "Preparing"
+        "Wondering", "Pondering", "Contemplating", "Musing", "Deliberating",
+        "Reasoning", "Analyzing", "Evaluating", "Considering", "Reflecting",
+        "Stewing", "Cogitating", "Hoping", "Exploring", "Preparing"
     ],
     VibeCategory.CONTEXT: [
-        "Mustering", "Coalescing", "Ideating"
+        "Mustering", "Coalescing", "Ideating", "Gathering", "Synthesizing",
+        "Compiling", "Organizing", "Structuring"
     ],
     VibeCategory.ACTION: [
-        "Completing", "Messaging", "Uploading", "Connecting",
-        "Affirming", "Rejoicing", "Celebrating"
+        "Completing", "Executing", "Processing", "Building", "Creating",
+        "Connecting", "Uploading", "Messaging", "Affirming", "Accomplishing",
+        "Rejoicing", "Celebrating"
     ],
 }
 

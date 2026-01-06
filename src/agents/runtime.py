@@ -38,6 +38,11 @@ from src.core.events import (
     emit_run_cancelled,
     get_event_bus,
 )
+from src.core.db import (
+    create_or_resume_conversation,
+    generate_conversation_title,
+    ConversationDB,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +54,10 @@ logger = logging.getLogger(__name__)
 _current_run_id: Optional[str] = None
 _run_lock = asyncio.Lock()
 _cancellation_event: Optional[asyncio.Event] = None
+
+# Conversation persistence (Task F1)
+_current_conversation_id: Optional[str] = None
+_current_conversation_db: Optional[ConversationDB] = None
 
 
 class RunAlreadyActiveError(Exception):
@@ -102,6 +111,56 @@ def cancel_current_run() -> bool:
     return False
 
 
+def get_current_conversation_id() -> Optional[str]:
+    """
+    Get ID of the current conversation.
+
+    Returns:
+        Conversation ID string or None if no conversation is active.
+    """
+    return _current_conversation_id
+
+
+def get_conversation_db() -> Optional[ConversationDB]:
+    """
+    Get the current conversation database instance.
+
+    Returns:
+        ConversationDB instance or None if no conversation is active.
+    """
+    return _current_conversation_db
+
+
+def save_message_to_conversation(
+    role: str,
+    content: str,
+    tool_calls: Optional[list] = None
+) -> bool:
+    """
+    Save a message to the current conversation.
+
+    Args:
+        role: Message role ("user", "assistant", or "tool").
+        content: Message content.
+        tool_calls: Optional list of tool call dicts.
+
+    Returns:
+        True if message was saved, False if no active conversation.
+    """
+    if _current_conversation_db is None or _current_conversation_id is None:
+        logger.warning("Cannot save message: No active conversation")
+        return False
+
+    message_id = _current_conversation_db.save_message(
+        conversation_id=_current_conversation_id,
+        role=role,
+        content=content,
+        tool_calls=tool_calls
+    )
+
+    return message_id is not None
+
+
 # ============================================================================
 # MASTER AGENT ENTRYPOINT
 # ============================================================================
@@ -110,7 +169,8 @@ async def run_agent(
     user_input: str,
     project_root: str,
     max_iterations: int = 10,
-    config: Optional[Dict[str, Any]] = None
+    config: Optional[Dict[str, Any]] = None,
+    conversation_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Run the Master Agent for a single user request.
@@ -129,11 +189,13 @@ async def run_agent(
         project_root: Absolute path to workspace root directory.
         max_iterations: Maximum graph iterations to prevent infinite loops (default: 10).
         config: Optional runtime config overrides (for testing).
+        conversation_id: Optional conversation ID to resume (creates new if not provided).
 
     Returns:
         Dict with run results:
         {
             "run_id": str,
+            "conversation_id": str,
             "success": bool,
             "response": str,
             "files_touched": List[str],
@@ -153,7 +215,7 @@ async def run_agent(
         ... )
         >>> print(result["response"])
     """
-    global _current_run_id, _cancellation_event
+    global _current_run_id, _cancellation_event, _current_conversation_id, _current_conversation_db
 
     # ========================================================================
     # SINGLE RUN ENFORCEMENT
@@ -187,6 +249,25 @@ async def run_agent(
         # Ensure workspace is initialized (.pulse/ directory)
         workspace_mgr = ensure_workspace_initialized(str(project_root_path))
         logger.info(f"Workspace initialized: {project_root_path}")
+
+        # ====================================================================
+        # CONVERSATION PERSISTENCE (Task F1)
+        # ====================================================================
+
+        # Create or resume conversation
+        _current_conversation_db, _current_conversation_id = create_or_resume_conversation(
+            project_root=str(project_root_path),
+            conversation_id=conversation_id,
+            title=generate_conversation_title(user_input) if not conversation_id else None
+        )
+        logger.info(f"Conversation: {_current_conversation_id}")
+
+        # Save user's message to conversation history
+        _current_conversation_db.save_message(
+            conversation_id=_current_conversation_id,
+            role="user",
+            content=user_input
+        )
 
         # ====================================================================
         # SETTINGS SNAPSHOT (Phase 2)
@@ -285,8 +366,17 @@ async def run_agent(
         success = not actual_state["is_cancelled"] and actual_state["agent_response"] != ""
         cancelled = actual_state["is_cancelled"]
 
+        # Save agent's response to conversation history (Task F1)
+        if actual_state["agent_response"] and _current_conversation_db:
+            _current_conversation_db.save_message(
+                conversation_id=_current_conversation_id,
+                role="assistant",
+                content=actual_state["agent_response"]
+            )
+
         result = {
             "run_id": run_id,
+            "conversation_id": _current_conversation_id,
             "success": success,
             "response": actual_state["agent_response"],
             "files_touched": actual_state["files_touched"],
@@ -307,6 +397,7 @@ async def run_agent(
 
         return {
             "run_id": run_id,
+            "conversation_id": _current_conversation_id,
             "success": False,
             "response": "Run cancelled.",
             "files_touched": [],
@@ -323,6 +414,7 @@ async def run_agent(
 
         return {
             "run_id": run_id,
+            "conversation_id": _current_conversation_id,
             "success": False,
             "response": f"An error occurred: {str(e)}",
             "files_touched": [],
@@ -333,12 +425,14 @@ async def run_agent(
 
     finally:
         # ====================================================================
-        # CLEANUP: Release global lock
+        # CLEANUP: Release global lock and conversation state
         # ====================================================================
 
         async with _run_lock:
             _current_run_id = None
             _cancellation_event = None
+            _current_conversation_id = None
+            _current_conversation_db = None
             logger.info(f"Run {run_id} cleanup complete, lock released")
 
 
@@ -419,6 +513,7 @@ async def resume_with_approval(
 
     result = {
         "run_id": run_id,
+        "conversation_id": _current_conversation_id,
         "success": success,
         "response": actual_state.get("agent_response", ""),
         "files_touched": actual_state.get("files_touched", []),
@@ -438,4 +533,8 @@ __all__ = [
     "is_run_active",
     "resume_with_approval",
     "RunAlreadyActiveError",
+    # Conversation persistence (Task F1)
+    "get_current_conversation_id",
+    "get_conversation_db",
+    "save_message_to_conversation",
 ]

@@ -1,5 +1,5 @@
 """
-Tool Registry for Pulse IDE v2.6 (Phase 4).
+Tool Registry for Pulse IDE.
 
 Provides tool registration and execution for the Master Graph.
 Maps tool names to functions and handles structured invocation.
@@ -19,14 +19,245 @@ Safety:
 from typing import Dict, Any, Callable, Optional, List
 from pathlib import Path
 import logging
+import time
 from datetime import datetime
 
 from src.agents.state import ToolOutput
 from src.tools.file_ops import manage_file_ops
 from src.tools.patching import preview_patch, execute_patch
 from src.tools.rag import search_workspace, RAGManager
+from src.core.analytics import log_tool_usage
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# TOOL OUTPUT ENHANCEMENT HELPERS
+# ============================================================================
+
+def generate_tool_summary(tool_name: str, args: Dict[str, Any], result: Any, success: bool, error: Optional[str] = None) -> str:
+    """
+    Generate a human-readable 1-line summary of a tool execution.
+
+    Args:
+        tool_name: Name of the tool that was executed.
+        args: Arguments passed to the tool.
+        result: Tool execution result.
+        success: Whether the tool succeeded.
+        error: Error message if tool failed.
+
+    Returns:
+        str: Human-readable summary (e.g., "Read main.py (150 lines)")
+    """
+    if not success:
+        return f"FAILED: {tool_name} - {error or 'Unknown error'}"
+
+    if tool_name == "manage_file_ops":
+        operation = args.get("operation", "unknown")
+        path = args.get("path", "unknown")
+        if operation == "read":
+            if isinstance(result, dict) and "content" in result:
+                lines = result.get("content", "").count("\n") + 1
+                return f"Read {path} ({lines} lines)"
+            return f"Read {path}"
+        elif operation == "list":
+            if isinstance(result, dict) and "files" in result:
+                count = len(result.get("files", []))
+                return f"Listed {path} ({count} items)"
+            return f"Listed {path}"
+        elif operation == "create":
+            return f"Created {path}"
+        elif operation == "update":
+            return f"Updated {path}"
+        elif operation == "delete":
+            return f"Deleted {path}"
+        return f"File operation: {operation} on {path}"
+
+    elif tool_name == "search_workspace":
+        query = args.get("query", "")
+        if isinstance(result, list):
+            count = len(result)
+            return f"Search '{query[:30]}...' returned {count} results" if len(query) > 30 else f"Search '{query}' returned {count} results"
+        return f"Searched for '{query[:50]}...'" if len(query) > 50 else f"Searched for '{query}'"
+
+    elif tool_name == "apply_patch":
+        if isinstance(result, dict):
+            file_path = result.get("file_path", "unknown file")
+            return f"Generated patch for {file_path} (awaiting approval)"
+        return "Generated patch (awaiting approval)"
+
+    elif tool_name == "plan_terminal_cmd":
+        command = args.get("command", "")[:50]
+        risk = result.risk_label if hasattr(result, "risk_label") else "UNKNOWN"
+        return f"Planned command: '{command}...' (risk: {risk})" if len(args.get("command", "")) > 50 else f"Planned command: '{command}' (risk: {risk})"
+
+    elif tool_name == "run_terminal_cmd":
+        if isinstance(result, dict):
+            exit_code = result.get("exit_code", -1)
+            if result.get("timed_out"):
+                return "Terminal command timed out"
+            return f"Terminal command completed (exit code: {exit_code})"
+        return "Terminal command completed"
+
+    elif tool_name == "dependency_manager":
+        if isinstance(result, dict):
+            deps_found = len(result.get("dependencies", []))
+            return f"Detected {deps_found} dependencies"
+        return "Analyzed project dependencies"
+
+    elif tool_name == "web_search":
+        query = args.get("query", "")[:40]
+        if isinstance(result, list):
+            count = len(result)
+            return f"Web search '{query}...' returned {count} results" if len(args.get("query", "")) > 40 else f"Web search '{query}' returned {count} results"
+        return f"Web search for '{query}'"
+
+    elif tool_name == "implement_feature":
+        request = args.get("request", "")[:40]
+        if isinstance(result, dict):
+            patches = len(result.get("patch_plans", []))
+            return f"Generated {patches} patches for: {request}..."
+        return f"Implemented feature: {request}..."
+
+    elif tool_name == "diagnose_project":
+        if isinstance(result, dict):
+            risk = result.get("risk_level", "UNKNOWN")
+            findings = len(result.get("findings", []))
+            return f"Diagnosis complete: {risk} risk, {findings} findings"
+        return "Project diagnosis complete"
+
+    # Default fallback
+    return f"{tool_name} completed successfully"
+
+
+def generate_next_steps(tool_name: str, args: Dict[str, Any], result: Any, success: bool) -> List[str]:
+    """
+    Generate suggested follow-up actions based on tool result.
+
+    Args:
+        tool_name: Name of the tool that was executed.
+        args: Arguments passed to the tool.
+        result: Tool execution result.
+        success: Whether the tool succeeded.
+
+    Returns:
+        List[str]: Suggested next actions for the LLM.
+    """
+    if not success:
+        return [
+            "Check error message and identify root cause",
+            "Try alternative approach or parameters",
+            "Ask user for clarification if stuck"
+        ]
+
+    if tool_name == "manage_file_ops":
+        operation = args.get("operation", "unknown")
+        path = args.get("path", "")
+        if operation == "read":
+            return [
+                "Search for specific functions or patterns",
+                "Read imported modules or related files",
+                "Generate modifications using apply_patch"
+            ]
+        elif operation == "list":
+            return [
+                "Read specific files of interest",
+                "Search for patterns across the codebase",
+                "Identify entry points or configuration files"
+            ]
+        elif operation in ("create", "update"):
+            return [
+                "Read the file to verify changes",
+                "Run tests if applicable",
+                "Update related files if needed"
+            ]
+        elif operation == "delete":
+            return [
+                "Update imports in other files",
+                "Remove references to deleted file"
+            ]
+
+    elif tool_name == "search_workspace":
+        if isinstance(result, list) and len(result) == 0:
+            return [
+                "Try broader search terms",
+                "Use web_search for external documentation",
+                "List directory structure to find relevant files"
+            ]
+        elif isinstance(result, list) and len(result) > 0:
+            return [
+                "Read the most relevant files",
+                "Refine search if results are too broad",
+                "Generate modifications based on findings"
+            ]
+
+    elif tool_name == "apply_patch":
+        return [
+            "Wait for user approval",
+            "Prepare explanation for the changes",
+            "Consider additional related changes"
+        ]
+
+    elif tool_name == "plan_terminal_cmd":
+        return [
+            "Wait for user approval before execution",
+            "Prepare for handling command output",
+            "Have fallback plan if command fails"
+        ]
+
+    elif tool_name == "run_terminal_cmd":
+        if isinstance(result, dict):
+            exit_code = result.get("exit_code", -1)
+            if exit_code == 0:
+                return [
+                    "Parse command output for relevant info",
+                    "Proceed with next steps based on output",
+                    "Report success to user"
+                ]
+            else:
+                return [
+                    "Analyze error output",
+                    "Fix underlying issue",
+                    "Retry with corrected command"
+                ]
+
+    elif tool_name == "dependency_manager":
+        return [
+            "Install missing dependencies if needed",
+            "Check for version conflicts",
+            "Update project configuration"
+        ]
+
+    elif tool_name == "web_search":
+        if isinstance(result, list) and len(result) == 0:
+            return [
+                "Try different search terms",
+                "Check official documentation directly",
+                "Ask user for more context"
+            ]
+        else:
+            return [
+                "Extract relevant code patterns",
+                "Apply learnings to current task",
+                "Cite sources when explaining to user"
+            ]
+
+    elif tool_name == "implement_feature":
+        return [
+            "Review generated patches",
+            "Present patches for user approval",
+            "Suggest verification steps"
+        ]
+
+    elif tool_name == "diagnose_project":
+        return [
+            "Address high-priority findings first",
+            "Generate patches for fixes",
+            "Suggest preventive measures"
+        ]
+
+    # Default fallback
+    return ["Continue with main task", "Report results to user"]
 
 
 # ============================================================================
@@ -243,7 +474,7 @@ class ToolRegistry:
             args: Tool arguments (validated against tool.parameters).
 
         Returns:
-            ToolOutput with success/error status and result.
+            ToolOutput with success/error status, result, summary, and next_steps.
 
         Example:
             >>> result = registry.invoke_tool(
@@ -252,20 +483,25 @@ class ToolRegistry:
             ... )
             >>> result.success
             True
-            >>> result.result  # List of search results
-            [{'file_path': 'main.st', 'content': '...', ...}]
+            >>> result.summary
+            "Search 'timer logic' returned 3 results"
+            >>> result.next_steps
+            ["Read the most relevant files", "Refine search if results are too broad", ...]
         """
         logger.info(f"Invoking tool: {tool_name} with args: {args}")
 
         try:
             # Validate tool exists
             if tool_name not in self.tools:
+                error_msg = f"Tool not found: {tool_name}"
                 return ToolOutput(
                     tool_name=tool_name,
                     success=False,
                     result="",
-                    error=f"Tool not found: {tool_name}",
-                    timestamp=datetime.now().isoformat()
+                    error=error_msg,
+                    timestamp=datetime.now().isoformat(),
+                    summary=f"FAILED: {error_msg}",
+                    next_steps=["Check tool name spelling", "Use list_tools() to see available tools"]
                 )
 
             tool = self.tools[tool_name]
@@ -273,37 +509,80 @@ class ToolRegistry:
             # Validate required parameters
             missing_params = [p for p in tool.parameters if p not in args]
             if missing_params:
+                error_msg = f"Missing required parameters: {missing_params}"
                 return ToolOutput(
                     tool_name=tool_name,
                     success=False,
                     result="",
-                    error=f"Missing required parameters: {missing_params}",
-                    timestamp=datetime.now().isoformat()
+                    error=error_msg,
+                    timestamp=datetime.now().isoformat(),
+                    summary=f"FAILED: {error_msg}",
+                    next_steps=[f"Provide missing parameters: {missing_params}"]
                 )
+
+            # E3: Start timing for analytics
+            start_time = time.perf_counter()
 
             # Invoke tool function
             result = tool.function(args)
 
             # Wrap result in ToolOutput if not already
             if isinstance(result, ToolOutput):
+                # If ToolOutput already has summary/next_steps, use them; otherwise generate
+                if not result.summary:
+                    result = ToolOutput(
+                        tool_name=result.tool_name,
+                        success=result.success,
+                        result=result.result,
+                        error=result.error,
+                        timestamp=result.timestamp,
+                        summary=generate_tool_summary(tool_name, args, result.result, result.success, result.error),
+                        next_steps=result.next_steps if result.next_steps else generate_next_steps(tool_name, args, result.result, result.success)
+                    )
+                # E3: Log analytics for ToolOutput result
+                duration_ms = int((time.perf_counter() - start_time) * 1000)
+                log_tool_usage(tool_name, result.success, duration_ms, result.error, self.project_root)
                 return result
             else:
+                # Generate summary and next_steps for raw results
+                summary = generate_tool_summary(tool_name, args, result, True)
+                next_steps = generate_next_steps(tool_name, args, result, True)
+
+                # E3: Log analytics for raw result (assumed success)
+                duration_ms = int((time.perf_counter() - start_time) * 1000)
+                log_tool_usage(tool_name, True, duration_ms, None, self.project_root)
+
                 return ToolOutput(
                     tool_name=tool_name,
                     success=True,
                     result=result,
                     error=None,
-                    timestamp=datetime.now().isoformat()
+                    timestamp=datetime.now().isoformat(),
+                    summary=summary,
+                    next_steps=next_steps
                 )
 
         except Exception as e:
             logger.error(f"Tool invocation failed: {tool_name} - {e}", exc_info=True)
+            error_msg = str(e)
+            
+            # E3: Log analytics for failed execution
+            # Use 0 duration since we don't have a valid start_time in this scope
+            # (start_time is set after validation, exception may occur before that)
+            try:
+                duration_ms = int((time.perf_counter() - start_time) * 1000)
+            except NameError:
+                duration_ms = 0
+            log_tool_usage(tool_name, False, duration_ms, error_msg, self.project_root)
+            
             return ToolOutput(
                 tool_name=tool_name,
                 success=False,
                 result="",
-                error=str(e),
-                timestamp=datetime.now().isoformat()
+                error=error_msg,
+                timestamp=datetime.now().isoformat(),
+                summary=generate_tool_summary(tool_name, args, None, False, error_msg),
+                next_steps=generate_next_steps(tool_name, args, None, False)
             )
 
     def get_rag_manager(self) -> RAGManager:
@@ -534,7 +813,7 @@ class ToolRegistry:
             patch_plan: PatchPlan model from preview_patch.
 
         Returns:
-            ToolOutput with execution result.
+            ToolOutput with execution result, summary, and next_steps.
         """
         try:
             result = execute_patch(
@@ -543,22 +822,49 @@ class ToolRegistry:
                 rag_manager=self.get_rag_manager()
             )
 
+            success = result["status"] == "success"
+            file_path = getattr(patch_plan, "file_path", "unknown file")
+
+            if success:
+                summary = f"Applied patch to {file_path}"
+                next_steps = [
+                    "Read the file to verify changes",
+                    "Run tests if applicable",
+                    "Update related files if needed"
+                ]
+            else:
+                summary = f"FAILED: Patch application to {file_path} - {result.get('error', 'Unknown error')}"
+                next_steps = [
+                    "Check error message for root cause",
+                    "Verify file exists and is accessible",
+                    "Try alternative patch approach"
+                ]
+
             return ToolOutput(
                 tool_name="apply_patch",
-                success=result["status"] == "success",
+                success=success,
                 result=result,
                 error=result.get("error"),
-                timestamp=datetime.now().isoformat()
+                timestamp=datetime.now().isoformat(),
+                summary=summary,
+                next_steps=next_steps
             )
 
         except Exception as e:
             logger.error(f"Patch execution failed: {e}", exc_info=True)
+            error_msg = str(e)
             return ToolOutput(
                 tool_name="apply_patch",
                 success=False,
                 result="",
-                error=str(e),
-                timestamp=datetime.now().isoformat()
+                error=error_msg,
+                timestamp=datetime.now().isoformat(),
+                summary=f"FAILED: Patch execution - {error_msg}",
+                next_steps=[
+                    "Check error message for root cause",
+                    "Verify file path and permissions",
+                    "Try alternative approach"
+                ]
             )
 
     def execute_terminal_cmd_approved(self, command_plan: Any) -> ToolOutput:
@@ -571,7 +877,7 @@ class ToolRegistry:
             command_plan: CommandPlan model from plan_terminal_cmd.
 
         Returns:
-            ToolOutput with execution result.
+            ToolOutput with execution result, summary, and next_steps.
         """
         try:
             from src.tools.terminal import run_terminal_cmd
@@ -586,22 +892,58 @@ class ToolRegistry:
                 project_root=self.project_root,
             )
 
+            exit_code = result.get("exit_code", -1)
+            timed_out = result.get("timed_out", False)
+            success = exit_code == 0 and not timed_out
+            command_short = command_plan.command[:50]
+
+            if timed_out:
+                summary = f"Command timed out: '{command_short}...'" if len(command_plan.command) > 50 else f"Command timed out: '{command_plan.command}'"
+                next_steps = [
+                    "Check if process is stuck",
+                    "Consider increasing timeout",
+                    "Try breaking into smaller commands"
+                ]
+            elif success:
+                summary = f"Command succeeded: '{command_short}...'" if len(command_plan.command) > 50 else f"Command succeeded: '{command_plan.command}'"
+                next_steps = [
+                    "Parse command output for relevant info",
+                    "Proceed with next steps based on output",
+                    "Report success to user"
+                ]
+            else:
+                summary = f"Command failed (exit {exit_code}): '{command_short}...'" if len(command_plan.command) > 50 else f"Command failed (exit {exit_code}): '{command_plan.command}'"
+                next_steps = [
+                    "Analyze error output in stderr",
+                    "Fix underlying issue",
+                    "Retry with corrected command"
+                ]
+
             return ToolOutput(
                 tool_name="run_terminal_cmd",
-                success=result.get("exit_code", -1) == 0 and not result.get("timed_out", False),
+                success=success,
                 result=result,
-                error=result.get("stderr") if result.get("exit_code", -1) != 0 else None,
-                timestamp=datetime.now().isoformat()
+                error=result.get("stderr") if not success else None,
+                timestamp=datetime.now().isoformat(),
+                summary=summary,
+                next_steps=next_steps
             )
 
         except Exception as e:
             logger.error(f"Terminal command execution failed: {e}", exc_info=True)
+            error_msg = str(e)
             return ToolOutput(
                 tool_name="run_terminal_cmd",
                 success=False,
                 result="",
-                error=str(e),
-                timestamp=datetime.now().isoformat()
+                error=error_msg,
+                timestamp=datetime.now().isoformat(),
+                summary=f"FAILED: Terminal command execution - {error_msg}",
+                next_steps=[
+                    "Check error message for root cause",
+                    "Verify command syntax and permissions",
+                    "Try alternative approach"
+                ]
             )
 
     # ========================================================================

@@ -81,8 +81,15 @@ class VibeLoader:
         self._current_vibe = vibe
         self._visible = True
 
-        # Update text
-        self._status_text.value = f"Pulse is {vibe}..."
+        # F2: Smart formatting for different status types
+        # Single-word vibes: "Wondering" → "Pulse is Wondering..."
+        # Contextual phrases: "Reading files" → "Reading files..."
+        if " " in vibe or vibe.endswith("..."):
+            display_text = vibe if vibe.endswith("...") else f"{vibe}..."
+        else:
+            display_text = f"Pulse is {vibe}..."
+
+        self._status_text.value = display_text
         self._status_text.opacity = 1.0
 
         # Show progress ring

@@ -1,9 +1,3 @@
-"""
-Pulse IDE UI Components (Phase 7).
-
-Reusable UI widgets and modals.
-"""
-
 from src.ui.components.resizable_splitter import VerticalSplitter, HorizontalSplitter
 from src.ui.components.vibe_loader import VibeLoader, VibeStatusBar
 from src.ui.components.settings_modal import SettingsModal, open_settings_modal

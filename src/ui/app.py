@@ -1,5 +1,5 @@
 """
-Pulse IDE - Main Flet Application (Phase 7: UI Heartbeat)
+Pulse IDE - Main Flet Application
 
 Entry point for the Flet-based desktop UI with:
 - VS Code-style layout with menu bar
@@ -14,6 +14,7 @@ import flet as ft
 import asyncio
 import uuid
 import atexit
+import logging
 from typing import Dict, Any, Optional
 from pathlib import Path
 
@@ -50,6 +51,9 @@ except Exception as e:
     import traceback
     traceback.print_exc()
     create_master_graph = None
+
+# Logger
+logger = logging.getLogger(__name__)
 
 
 class PulseApp:
@@ -302,6 +306,14 @@ class PulseApp:
         self.bridge.set_approval_callback(self._on_approval_request)
         self.bridge.set_run_complete_callback(self._on_run_complete)
 
+        # ================================================================
+        # CRITICAL FIX (Bug #2): Start bridge event consumer
+        # ================================================================
+        # The bridge MUST start consuming events from the EventBus to receive
+        # approval requests from the graph. Without this, approval events are
+        # emitted but never received, so modals never appear!
+        self.page.run_task(self._start_bridge_consumer)
+
     def _setup_shutdown_handler(self):
         """Setup shutdown handler for cleanup."""
         # Register cleanup on app exit
@@ -316,6 +328,11 @@ class PulseApp:
     def _cleanup(self):
         """Cleanup on app close."""
         print("[SHUTDOWN] Starting cleanup...")
+
+        # Stop bridge event consumer
+        if self.bridge:
+            print("[SHUTDOWN] Stopping event consumer...")
+            self.bridge._shutdown = True  # Signal consumer to stop
 
         # Cancel active run
         if self.current_run_task and not self.current_run_task.done():
@@ -334,6 +351,25 @@ class PulseApp:
             print(f"[SHUTDOWN] Process cleanup error: {e}")
 
         print("[SHUTDOWN] Cleanup complete")
+
+    async def _start_bridge_consumer(self):
+        """
+        Start UIBridge event consumer as background task.
+
+        This method starts listening for events from the EventBus, including:
+        - Approval requests (patch, terminal)
+        - Vibe status updates
+        - Run completion events
+
+        CRITICAL: Without this, approval modals will NEVER appear because
+        the bridge won't receive the approval_requested events from the graph!
+        """
+        try:
+            logger.info("🚀 Starting UIBridge event consumer...")
+            await self.bridge.start_consuming()
+        except Exception as e:
+            logger.error(f"❌ Event consumer error: {e}", exc_info=True)
+            print(f"[ERROR] Failed to start event consumer: {e}")
 
     # ========================================================================
     # EVENT HANDLERS
@@ -545,13 +581,23 @@ class PulseApp:
                     inputs["messages"] = existing_history + [{"role": "user", "content": user_input}]
 
                 # Stream graph execution with thread_id config (required for checkpointer)
-                import uuid
-                config = {"configurable": {"thread_id": str(uuid.uuid4())}}
+                # Use persistent thread_id to maintain conversation history
+                if not hasattr(self, '_conversation_thread_id'):
+                    import uuid
+                    self._conversation_thread_id = str(uuid.uuid4())
+                    logger.info(f"Created new conversation thread: {self._conversation_thread_id}")
+
+                config = {"configurable": {"thread_id": self._conversation_thread_id}}
 
                 # Use astream() for async nodes (master_agent_node is async def)
+                # Track final state to extract updated message history
+                final_state = None
                 async for event in self._master_graph.astream(inputs, config):
                     for node_name, result in event.items():
                         if result:
+                            # Store final state (last event will have complete message history)
+                            final_state = result
+
                             # Handle agent response
                             if result.get("agent_response"):
                                 target_log_panel.append_log(
@@ -570,6 +616,17 @@ class PulseApp:
                 print(f"[ERROR] {traceback.format_exc()}")
 
             finally:
+                # ================================================================
+                # CRITICAL FIX (Bug #1): Update message history with final state
+                # ================================================================
+                # The graph maintains conversation history in state["messages"].
+                # After execution, we MUST save the updated messages back to the
+                # log panel so the next request has access to the full history.
+                # Without this, the agent has NO MEMORY between requests!
+                if final_state and "messages" in final_state:
+                    target_log_panel.update_message_history(final_state["messages"])
+                    logger.info(f"✅ Updated message history: {len(final_state['messages'])} messages")
+
                 # Reset state
                 self.is_running = False
                 self.active_log_panel = None

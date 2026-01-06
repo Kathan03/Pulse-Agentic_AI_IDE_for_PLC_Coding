@@ -87,12 +87,13 @@ class EventBus:
     Phase 3 scope: Single global event bus instance.
     """
 
-    def __init__(self, status_rate_limit_seconds: float = 2.0):
+    def __init__(self, status_rate_limit_seconds: float = 0.5):
         """
         Initialize event bus.
 
         Args:
-            status_rate_limit_seconds: Minimum time between status updates (default: 2.0s).
+            status_rate_limit_seconds: Minimum time between status updates (default: 0.5s).
+                                       F2 Enhancement: reduced from 2.0s for faster updates.
         """
         self._queues: list[asyncio.Queue] = []
         self._status_rate_limit = status_rate_limit_seconds

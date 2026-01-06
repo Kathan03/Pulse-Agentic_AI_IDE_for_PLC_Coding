@@ -2,7 +2,7 @@
 Cursor-style Settings Page for Pulse IDE
 
 A dedicated settings page that opens as a tab in the editor with:
-- Left sidebar with sections: API Keys, Models, Code Intelligence, Theme
+- Left sidebar with sections: API Keys, Models, Code Intelligence, Theme, Usage
 - Right content area with settings for each section
 - Default welcome/readme page
 """
@@ -86,6 +86,7 @@ class SettingsPage:
         models_btn = self._create_sidebar_button("Models", "models", ft.Icons.PSYCHOLOGY)
         code_ai_btn = self._create_sidebar_button("Code Intelligence", "code_intelligence", ft.Icons.LIGHTBULB)
         theme_btn = self._create_sidebar_button("Theme", "theme", ft.Icons.PALETTE)
+        usage_btn = self._create_sidebar_button("Usage", "usage", ft.Icons.ANALYTICS)
 
         # Store references
         self._sidebar_buttons = {
@@ -93,6 +94,7 @@ class SettingsPage:
             "models": models_btn,
             "code_intelligence": code_ai_btn,
             "theme": theme_btn,
+            "usage": usage_btn,
         }
 
         return ft.Container(
@@ -112,6 +114,7 @@ class SettingsPage:
                     models_btn,
                     code_ai_btn,
                     theme_btn,
+                    usage_btn,
                 ],
                 spacing=4,
             ),
@@ -170,6 +173,8 @@ class SettingsPage:
             self._content_area.content = self._build_code_intelligence_content()
         elif section == "theme":
             self._content_area.content = self._build_theme_content()
+        elif section == "usage":
+            self._content_area.content = self._build_usage_content()
 
         self._content_area.update()
 
@@ -201,6 +206,7 @@ class SettingsPage:
                 self._create_quick_link("🤖 Models", "Select AI models for different agents", "models"),
                 self._create_quick_link("💡 Code Intelligence", "Enable/disable agent toggles", "code_intelligence"),
                 self._create_quick_link("🎨 Theme", "Choose your IDE theme", "theme"),
+                self._create_quick_link("📊 Usage", "View token usage and estimated costs", "usage"),
             ],
             scroll=ft.ScrollMode.AUTO,
             spacing=4,
@@ -632,6 +638,158 @@ class SettingsPage:
             padding=10,
             border_radius=Spacing.BORDER_RADIUS_SMALL,
             border=ft.border.all(1, VSCodeColors.PANEL_BORDER),
+        )
+
+    def _build_usage_content(self) -> ft.Column:
+        """Build Usage statistics content with per-model breakdown."""
+        from src.core.llm_client import get_session_tracker
+        
+        tracker = get_session_tracker()
+        breakdown = tracker.get_model_breakdown()
+        
+        # Status text for reset button
+        status_text = ft.Text("", size=Fonts.FONT_SIZE_SMALL, visible=False)
+        
+        def reset_usage(e):
+            tracker.reset()
+            status_text.value = "✓ Usage reset"
+            status_text.color = VSCodeColors.SUCCESS_FOREGROUND
+            status_text.visible = True
+            status_text.update()
+            # Refresh the content
+            self._content_area.content = self._build_usage_content()
+            self._content_area.update()
+        
+        # Build per-model table rows
+        table_rows = []
+        if breakdown:
+            for item in breakdown:
+                table_rows.append(
+                    ft.DataRow(
+                        cells=[
+                            ft.DataCell(ft.Text(item["model"], color=VSCodeColors.EDITOR_FOREGROUND)),
+                            ft.DataCell(ft.Text(f"{item['tokens']:,}", color=VSCodeColors.EDITOR_FOREGROUND)),
+                            ft.DataCell(ft.Text(f"${item['cost_usd']:.4f}", color=VSCodeColors.EDITOR_FOREGROUND)),
+                            ft.DataCell(ft.Text(str(item["call_count"]), color=VSCodeColors.EDITOR_FOREGROUND)),
+                        ]
+                    )
+                )
+            # Add total row
+            table_rows.append(
+                ft.DataRow(
+                    cells=[
+                        ft.DataCell(ft.Text("Total", weight=ft.FontWeight.BOLD, color=VSCodeColors.EDITOR_FOREGROUND)),
+                        ft.DataCell(ft.Text(f"{tracker.total_tokens:,}", weight=ft.FontWeight.BOLD, color=VSCodeColors.EDITOR_FOREGROUND)),
+                        ft.DataCell(ft.Text(f"${tracker.total_cost_usd:.4f}", weight=ft.FontWeight.BOLD, color=VSCodeColors.EDITOR_FOREGROUND)),
+                        ft.DataCell(ft.Text(str(tracker.call_count), weight=ft.FontWeight.BOLD, color=VSCodeColors.EDITOR_FOREGROUND)),
+                    ],
+                    color=VSCodeColors.LIST_ACTIVE_SELECTION_BACKGROUND,
+                )
+            )
+        
+        # Usage table
+        usage_table = ft.DataTable(
+            columns=[
+                ft.DataColumn(ft.Text("Model", weight=ft.FontWeight.BOLD, color=VSCodeColors.EDITOR_FOREGROUND)),
+                ft.DataColumn(ft.Text("Tokens", weight=ft.FontWeight.BOLD, color=VSCodeColors.EDITOR_FOREGROUND)),
+                ft.DataColumn(ft.Text("Cost (USD)", weight=ft.FontWeight.BOLD, color=VSCodeColors.EDITOR_FOREGROUND)),
+                ft.DataColumn(ft.Text("Calls", weight=ft.FontWeight.BOLD, color=VSCodeColors.EDITOR_FOREGROUND)),
+            ],
+            rows=table_rows,
+            border=ft.border.all(1, VSCodeColors.PANEL_BORDER),
+            border_radius=Spacing.BORDER_RADIUS_SMALL,
+            heading_row_color=VSCodeColors.PANEL_BACKGROUND,
+        ) if table_rows else ft.Text(
+            "No usage data yet. Start an agent session to see token usage.",
+            size=Fonts.FONT_SIZE_NORMAL,
+            color=VSCodeColors.DESCRIPTION_FOREGROUND,
+            italic=True,
+        )
+        
+        return ft.Column(
+            controls=[
+                ft.Text(
+                    "📊 Usage Statistics",
+                    size=20,
+                    weight=ft.FontWeight.BOLD,
+                    color=VSCodeColors.EDITOR_FOREGROUND,
+                ),
+                ft.Container(height=10),
+                ft.Text(
+                    "Token usage and estimated costs for this session, broken down by model.",
+                    size=Fonts.FONT_SIZE_SMALL,
+                    color=VSCodeColors.DESCRIPTION_FOREGROUND,
+                ),
+                ft.Container(height=20),
+                
+                # Summary stats
+                ft.Row(
+                    controls=[
+                        ft.Container(
+                            content=ft.Column([
+                                ft.Text(f"{tracker.total_tokens:,}", size=24, weight=ft.FontWeight.BOLD, color=VSCodeColors.EDITOR_FOREGROUND),
+                                ft.Text("Total Tokens", size=Fonts.FONT_SIZE_SMALL, color=VSCodeColors.DESCRIPTION_FOREGROUND),
+                            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
+                            padding=16,
+                            border=ft.border.all(1, VSCodeColors.PANEL_BORDER),
+                            border_radius=Spacing.BORDER_RADIUS_SMALL,
+                            expand=True,
+                        ),
+                        ft.Container(
+                            content=ft.Column([
+                                ft.Text(f"${tracker.total_cost_usd:.4f}", size=24, weight=ft.FontWeight.BOLD, color=VSCodeColors.EDITOR_FOREGROUND),
+                                ft.Text("Estimated Cost", size=Fonts.FONT_SIZE_SMALL, color=VSCodeColors.DESCRIPTION_FOREGROUND),
+                            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
+                            padding=16,
+                            border=ft.border.all(1, VSCodeColors.PANEL_BORDER),
+                            border_radius=Spacing.BORDER_RADIUS_SMALL,
+                            expand=True,
+                        ),
+                        ft.Container(
+                            content=ft.Column([
+                                ft.Text(str(tracker.call_count), size=24, weight=ft.FontWeight.BOLD, color=VSCodeColors.EDITOR_FOREGROUND),
+                                ft.Text("API Calls", size=Fonts.FONT_SIZE_SMALL, color=VSCodeColors.DESCRIPTION_FOREGROUND),
+                            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
+                            padding=16,
+                            border=ft.border.all(1, VSCodeColors.PANEL_BORDER),
+                            border_radius=Spacing.BORDER_RADIUS_SMALL,
+                            expand=True,
+                        ),
+                    ],
+                    spacing=12,
+                ),
+                ft.Container(height=20),
+                
+                # Per-model breakdown
+                ft.Text(
+                    "Per-Model Breakdown",
+                    size=Fonts.FONT_SIZE_MEDIUM,
+                    weight=ft.FontWeight.BOLD,
+                    color=VSCodeColors.EDITOR_FOREGROUND,
+                ),
+                ft.Container(height=10),
+                usage_table,
+                ft.Container(height=20),
+                
+                # Reset button
+                ft.Row(
+                    controls=[
+                        ft.ElevatedButton(
+                            "Reset Session Usage",
+                            icon=ft.Icons.REFRESH,
+                            on_click=reset_usage,
+                            style=ft.ButtonStyle(
+                                bgcolor=VSCodeColors.BUTTON_BACKGROUND,
+                                color=VSCodeColors.BUTTON_FOREGROUND,
+                            ),
+                        ),
+                        status_text,
+                    ],
+                    spacing=10,
+                ),
+            ],
+            scroll=ft.ScrollMode.AUTO,
+            spacing=8,
         )
 
     def get_control(self) -> ft.Container:

@@ -17,7 +17,7 @@ Features:
 import logging
 import os
 from typing import Dict, Any, List, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 # Import SDKs
 try:
@@ -50,6 +50,25 @@ class ToolCall:
 
 
 @dataclass
+class TokenUsage:
+    """
+    Token usage with cost estimation.
+    
+    Attributes:
+        prompt_tokens: Number of input tokens.
+        completion_tokens: Number of output tokens.
+        total_tokens: Total tokens (prompt + completion).
+        estimated_cost_usd: Estimated cost in USD.
+        model: Model name that was used.
+    """
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    estimated_cost_usd: float
+    model: str = ""
+
+
+@dataclass
 class LLMResponse:
     """
     Unified LLM response format.
@@ -58,12 +77,113 @@ class LLMResponse:
         content: Text response from LLM (if any).
         tool_calls: List of tool calls requested by LLM (if any).
         finish_reason: Reason for completion ("stop", "tool_calls", etc.).
-        usage: Token usage statistics.
+        usage: Token usage with cost estimation.
     """
     content: Optional[str]
     tool_calls: List[ToolCall]
     finish_reason: str
-    usage: Dict[str, int]
+    usage: TokenUsage
+
+
+# ============================================================================
+# SESSION COST TRACKER
+# ============================================================================
+
+class SessionCostTracker:
+    """
+    Accumulates token usage and cost across a session, with per-model breakdown.
+    
+    Example:
+        >>> tracker = SessionCostTracker()
+        >>> tracker.add(usage)  # TokenUsage from LLMResponse
+        >>> print(tracker.summary())
+        "3 calls, 5,432 tokens, $0.0156"
+    """
+    
+    def __init__(self):
+        """Initialize empty tracker."""
+        self.usage_by_model: Dict[str, Dict[str, Any]] = {}
+        self.total_prompt_tokens: int = 0
+        self.total_completion_tokens: int = 0
+        self.total_cost_usd: float = 0.0
+        self.call_count: int = 0
+    
+    def add(self, usage: TokenUsage) -> None:
+        """
+        Add token usage from an LLM response.
+        
+        Args:
+            usage: TokenUsage object from LLMResponse.
+        """
+        model = usage.model or "unknown"
+        
+        # Initialize model entry if needed
+        if model not in self.usage_by_model:
+            self.usage_by_model[model] = {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "cost_usd": 0.0,
+                "call_count": 0
+            }
+        
+        # Update per-model stats
+        self.usage_by_model[model]["prompt_tokens"] += usage.prompt_tokens
+        self.usage_by_model[model]["completion_tokens"] += usage.completion_tokens
+        self.usage_by_model[model]["total_tokens"] += usage.total_tokens
+        self.usage_by_model[model]["cost_usd"] += usage.estimated_cost_usd
+        self.usage_by_model[model]["call_count"] += 1
+        
+        # Update totals
+        self.total_prompt_tokens += usage.prompt_tokens
+        self.total_completion_tokens += usage.completion_tokens
+        self.total_cost_usd += usage.estimated_cost_usd
+        self.call_count += 1
+    
+    @property
+    def total_tokens(self) -> int:
+        """Get total tokens (prompt + completion)."""
+        return self.total_prompt_tokens + self.total_completion_tokens
+    
+    def get_model_breakdown(self) -> List[Dict[str, Any]]:
+        """
+        Get usage breakdown by model for settings UI.
+        
+        Returns:
+            List of dicts with model, tokens, and cost.
+        """
+        breakdown = []
+        for model, stats in sorted(self.usage_by_model.items()):
+            breakdown.append({
+                "model": model,
+                "tokens": stats["total_tokens"],
+                "prompt_tokens": stats["prompt_tokens"],
+                "completion_tokens": stats["completion_tokens"],
+                "cost_usd": stats["cost_usd"],
+                "call_count": stats["call_count"]
+            })
+        return breakdown
+    
+    def reset(self) -> None:
+        """Reset all tracking data."""
+        self.usage_by_model = {}
+        self.total_prompt_tokens = 0
+        self.total_completion_tokens = 0
+        self.total_cost_usd = 0.0
+        self.call_count = 0
+    
+    def summary(self) -> str:
+        """Get human-readable summary string."""
+        return f"{self.call_count} calls, {self.total_tokens:,} tokens, ${self.total_cost_usd:.4f}"
+
+
+# Global session tracker instance
+_session_tracker = SessionCostTracker()
+
+
+def get_session_tracker() -> SessionCostTracker:
+    """Get the global session cost tracker."""
+    return _session_tracker
 
 
 # ============================================================================
@@ -148,6 +268,23 @@ class LLMClient:
         }
     }
 
+    # Pricing per 1M tokens (input_price, output_price) in USD
+    # These are approximate prices as of Jan 2026 - update as needed
+    MODEL_PRICING = {
+        "gpt-5": (5.00, 15.00),
+        "gpt-4.1": (2.00, 8.00),
+        "gpt-4o": (2.50, 10.00),
+        "gpt-4o-mini": (0.15, 0.60),
+        "gpt-4-turbo": (10.00, 30.00),
+        "gpt-3.5-turbo": (0.50, 1.50),
+        "claude-opus-4-5": (15.00, 75.00),
+        "claude-sonnet-4-5": (3.00, 15.00),
+        "claude-haiku-4-5": (0.25, 1.25),
+        "claude-3-5-sonnet": (3.00, 15.00),
+        "claude-3-opus": (15.00, 75.00),
+        "claude-3-haiku": (0.25, 1.25),
+    }
+
     def __init__(self):
         """
         Initialize LLM client.
@@ -159,6 +296,29 @@ class LLMClient:
         self.anthropic_client: Optional[anthropic.Anthropic] = None
 
         logger.info("LLMClient initialized")
+
+    def _calculate_cost(self, model: str, prompt_tokens: int, completion_tokens: int) -> float:
+        """
+        Calculate estimated cost in USD for an LLM call.
+
+        Args:
+            model: Model identifier.
+            prompt_tokens: Number of input tokens.
+            completion_tokens: Number of output tokens.
+
+        Returns:
+            Estimated cost in USD (rounded to 6 decimal places).
+        """
+        # Find matching pricing by model prefix
+        for prefix, (input_price, output_price) in self.MODEL_PRICING.items():
+            if model.startswith(prefix):
+                cost = (prompt_tokens / 1_000_000) * input_price
+                cost += (completion_tokens / 1_000_000) * output_price
+                return round(cost, 6)
+        
+        # Unknown model - return 0
+        logger.warning(f"No pricing found for model '{model}', returning $0 cost estimate")
+        return 0.0
 
     def _get_provider(self, model: str) -> str:
         """
@@ -504,14 +664,21 @@ class LLMClient:
                         arguments=json.loads(tc.function.arguments)
                     ))
 
-            # Extract usage
-            usage = {
-                "prompt_tokens": response.usage.prompt_tokens,
-                "completion_tokens": response.usage.completion_tokens,
-                "total_tokens": response.usage.total_tokens
-            }
+            # Extract usage with cost calculation
+            prompt_tokens = response.usage.prompt_tokens
+            completion_tokens = response.usage.completion_tokens
+            total_tokens = response.usage.total_tokens
+            estimated_cost = self._calculate_cost(model, prompt_tokens, completion_tokens)
+            
+            usage = TokenUsage(
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=total_tokens,
+                estimated_cost_usd=estimated_cost,
+                model=model
+            )
 
-            logger.info(f"OpenAI response: finish_reason={finish_reason}, tool_calls={len(tool_calls)}, tokens={usage['total_tokens']}")
+            logger.info(f"OpenAI response: finish_reason={finish_reason}, tool_calls={len(tool_calls)}, tokens={usage.total_tokens}, cost=${usage.estimated_cost_usd:.6f}")
 
             return LLMResponse(
                 content=content,
@@ -601,14 +768,21 @@ class LLMClient:
                         arguments=block.input
                     ))
 
-            # Extract usage
-            usage = {
-                "prompt_tokens": response.usage.input_tokens,
-                "completion_tokens": response.usage.output_tokens,
-                "total_tokens": response.usage.input_tokens + response.usage.output_tokens
-            }
+            # Extract usage with cost calculation
+            prompt_tokens = response.usage.input_tokens
+            completion_tokens = response.usage.output_tokens
+            total_tokens = prompt_tokens + completion_tokens
+            estimated_cost = self._calculate_cost(model, prompt_tokens, completion_tokens)
+            
+            usage = TokenUsage(
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=total_tokens,
+                estimated_cost_usd=estimated_cost,
+                model=model
+            )
 
-            logger.info(f"Anthropic response: stop_reason={response.stop_reason}, tool_calls={len(tool_calls)}, tokens={usage['total_tokens']}")
+            logger.info(f"Anthropic response: stop_reason={response.stop_reason}, tool_calls={len(tool_calls)}, tokens={usage.total_tokens}, cost=${usage.estimated_cost_usd:.6f}")
 
             return LLMResponse(
                 content=content_text,
@@ -708,4 +882,4 @@ class LLMClient:
         return anthropic_tools
 
 
-__all__ = ["LLMClient", "LLMResponse", "ToolCall"]
+__all__ = ["LLMClient", "LLMResponse", "ToolCall", "TokenUsage", "SessionCostTracker", "get_session_tracker"]

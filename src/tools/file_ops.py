@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 def manage_file_ops(
-    operation: Literal["read", "write", "delete", "list"],
+    operation: Literal["create", "read", "update", "write", "delete", "list"],
     path: str,
     project_root: Path,
     content: Optional[str] = None,
@@ -39,10 +39,11 @@ def manage_file_ops(
     Tier 1 atomic tool for file operations.
 
     Args:
-        operation: Operation type ("read", "write", "delete", "list").
+        operation: Operation type ("create", "read", "update", "delete", "list").
+                   Note: "create" and "update" are aliases for "write".
         path: File/directory path (relative to project_root or absolute).
         project_root: Project root directory (boundary enforcement).
-        content: File content (required for write operation).
+        content: File content (required for create/update/write operations).
         rag_manager: Optional RAGManager instance (for freshness updates).
 
     Returns:
@@ -63,16 +64,21 @@ def manage_file_ops(
 
     Example:
         >>> result = manage_file_ops(
-        ...     operation="read",
-        ...     path="src/main.st",
-        ...     project_root=Path("/workspace/my_project")
+        ...     operation="create",
+        ...     path="assets/test.txt",
+        ...     project_root=Path("/workspace/my_project"),
+        ...     content="Hello, World!"
         ... )
         >>> result["status"]
         'success'
-        >>> result["content"]
-        'PROGRAM Main\\n  VAR...'
     """
     logger.info(f"File operation: {operation} on {path}")
+
+    # Normalize operation names (create/update → write)
+    if operation in ["create", "update"]:
+        operation_normalized = "write"
+    else:
+        operation_normalized = operation
 
     resolved_path = None
 
@@ -82,7 +88,7 @@ def manage_file_ops(
         # ====================================================================
 
         path_obj = Path(path)
-        validate_file_operation(operation, path_obj, project_root)
+        validate_file_operation(operation_normalized, path_obj, project_root)
 
         # Resolve to absolute path
         if not path_obj.is_absolute():
@@ -99,7 +105,7 @@ def manage_file_ops(
         file_manager = FileManager(str(project_root))
 
         # READ operation
-        if operation == "read":
+        if operation_normalized == "read":
             if not resolved_path.exists():
                 return {
                     "operation": operation,
@@ -142,8 +148,8 @@ def manage_file_ops(
                 "content": truncated_content,
             }
 
-        # WRITE operation
-        elif operation == "write":
+        # WRITE operation (create/update/write)
+        elif operation_normalized == "write":
             if content is None:
                 return {
                     "operation": operation,
@@ -172,7 +178,7 @@ def manage_file_ops(
             }
 
         # DELETE operation
-        elif operation == "delete":
+        elif operation_normalized == "delete":
             if not resolved_path.exists():
                 return {
                     "operation": operation,
@@ -210,7 +216,7 @@ def manage_file_ops(
             }
 
         # LIST operation
-        elif operation == "list":
+        elif operation_normalized == "list":
             if not resolved_path.exists():
                 return {
                     "operation": operation,

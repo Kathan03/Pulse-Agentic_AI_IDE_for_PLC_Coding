@@ -10,6 +10,5 @@ from src.ui.app import main
 # Load environment variables from .env file (for development)
 load_dotenv()
 
-
 if __name__ == "__main__":
     ft.app(target=main)

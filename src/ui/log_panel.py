@@ -99,6 +99,7 @@ class LogPanel:
         # Phase 7: Input disable state during agent runs
         self._input_disabled = False
         self._stop_button = None
+        self._on_stop_callback = None  # G3: Stop button callback
 
         # Meta-inspired loading animation
         self._loading_animation = None
@@ -788,6 +789,14 @@ class LogPanel:
         # Switch back to log view
         self.show_log_view()
 
+    def _handle_stop_click(self, e):
+        """G3: Handle Stop button click during agent run."""
+        print("[LOG_PANEL] Stop button clicked - cancelling run")
+        if self._on_stop_callback:
+            self._on_stop_callback()
+        # Re-enable input after cancellation
+        self.enable_input()
+
     # ============================================================================
     # Phase 7: Input Disable State During Runs
     # ============================================================================
@@ -796,18 +805,41 @@ class LogPanel:
         """
         Disable input during agent run with Meta-inspired loading animation.
 
-        Shows a professional loading indicator instead of plain text.
+        Shows a professional loading indicator and stop button.
 
         Args:
             on_stop: Callback when stop button is clicked.
         """
         self._input_disabled = True
+        self._on_stop_callback = on_stop  # G3: Store callback for stop button
+        
         if self.input_field:
             self.input_field.disabled = True
             self.input_field.hint_text = "Pulse is thinking..."
             if self.input_field.page:
                 self.input_field.update()
 
+        # G3: Create and show stop button if callback provided
+        if on_stop and self._loading_container:
+            # Create stop button with modern styling
+            self._stop_button = ft.Container(
+                content=ft.Row(
+                    controls=[
+                        ft.Icon(ft.Icons.STOP_CIRCLE_OUTLINED, color="#FF6B6B", size=16),
+                        ft.Text("Stop", color="#FF6B6B", size=12, weight=ft.FontWeight.W_500),
+                    ],
+                    spacing=4,
+                ),
+                on_click=self._handle_stop_click,
+                padding=ft.padding.symmetric(horizontal=12, vertical=6),
+                border=ft.border.all(1, "#FF6B6B"),
+                border_radius=6,
+                ink=True,
+                tooltip="Cancel current run",
+            )
+            # Update loading animation to include stop button
+            self._loading_animation.message = "Pulse is thinking..."
+            
         # Show loading animation
         if self._loading_container:
             self._loading_container.visible = True
