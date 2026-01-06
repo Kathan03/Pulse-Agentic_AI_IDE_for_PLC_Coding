@@ -641,17 +641,20 @@ class SettingsPage:
         )
 
     def _build_usage_content(self) -> ft.Column:
-        """Build Usage statistics content with per-model breakdown."""
+        """Build Usage statistics content with per-model breakdown and tool analytics."""
         from src.core.llm_client import get_session_tracker
+        from src.core.analytics import get_analytics_summary, reset_analytics
         
         tracker = get_session_tracker()
         breakdown = tracker.get_model_breakdown()
+        tool_summary = get_analytics_summary()
         
         # Status text for reset button
         status_text = ft.Text("", size=Fonts.FONT_SIZE_SMALL, visible=False)
         
         def reset_usage(e):
             tracker.reset()
+            reset_analytics()
             status_text.value = "✓ Usage reset"
             status_text.color = VSCodeColors.SUCCESS_FOREGROUND
             status_text.visible = True
@@ -762,20 +765,75 @@ class SettingsPage:
                 
                 # Per-model breakdown
                 ft.Text(
-                    "Per-Model Breakdown",
+                    "Per-Model Token Usage",
                     size=Fonts.FONT_SIZE_MEDIUM,
                     weight=ft.FontWeight.BOLD,
                     color=VSCodeColors.EDITOR_FOREGROUND,
                 ),
                 ft.Container(height=10),
                 usage_table,
+                ft.Container(height=30),
+
+                # Tool Analytics Section
+                ft.Text(
+                    "📊 Tool Usage Analytics",
+                    size=20,
+                    weight=ft.FontWeight.BOLD,
+                    color=VSCodeColors.EDITOR_FOREGROUND,
+                ),
+                ft.Container(height=10),
+                ft.Text(
+                    "Execution statistics for Pulse tools, including success rates and performance.",
+                    size=Fonts.FONT_SIZE_SMALL,
+                    color=VSCodeColors.DESCRIPTION_FOREGROUND,
+                ),
                 ft.Container(height=20),
+
+                # Tool Summary Stats
+                ft.Row(
+                    controls=[
+                        ft.Container(
+                            content=ft.Column([
+                                ft.Text(str(tool_summary["total_calls"]), size=24, weight=ft.FontWeight.BOLD, color=VSCodeColors.EDITOR_FOREGROUND),
+                                ft.Text("Total Tool Calls", size=Fonts.FONT_SIZE_SMALL, color=VSCodeColors.DESCRIPTION_FOREGROUND),
+                            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
+                            padding=16,
+                            border=ft.border.all(1, VSCodeColors.PANEL_BORDER),
+                            border_radius=Spacing.BORDER_RADIUS_SMALL,
+                            expand=True,
+                        ),
+                        ft.Container(
+                            content=ft.Column([
+                                ft.Text(f"{tool_summary['success_rate']}%", size=24, weight=ft.FontWeight.BOLD, color=VSCodeColors.EDITOR_FOREGROUND),
+                                ft.Text("Overall Success Rate", size=Fonts.FONT_SIZE_SMALL, color=VSCodeColors.DESCRIPTION_FOREGROUND),
+                            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
+                            padding=16,
+                            border=ft.border.all(1, VSCodeColors.PANEL_BORDER),
+                            border_radius=Spacing.BORDER_RADIUS_SMALL,
+                            expand=True,
+                        ),
+                    ],
+                    spacing=12,
+                ),
+                ft.Container(height=20),
+
+                # Per-tool breakdown table
+                ft.Text(
+                    "Per-Tool Performance",
+                    size=Fonts.FONT_SIZE_MEDIUM,
+                    weight=ft.FontWeight.BOLD,
+                    color=VSCodeColors.EDITOR_FOREGROUND,
+                ),
+                ft.Container(height=10),
+                self._build_tool_analytics_table(tool_summary),
+                
+                ft.Container(height=30),
                 
                 # Reset button
                 ft.Row(
                     controls=[
                         ft.ElevatedButton(
-                            "Reset Session Usage",
+                            "Reset Usage Statistics",
                             icon=ft.Icons.REFRESH,
                             on_click=reset_usage,
                             style=ft.ButtonStyle(
@@ -790,6 +848,48 @@ class SettingsPage:
             ],
             scroll=ft.ScrollMode.AUTO,
             spacing=8,
+        )
+
+    def _build_tool_analytics_table(self, summary: Dict[str, Any]) -> ft.Control:
+        """Build the data table for per-tool analytics."""
+        by_tool = summary.get("by_tool", {})
+        if not by_tool:
+            return ft.Text(
+                "No tool usage data yet. Tools will appear here as they are executed.",
+                size=Fonts.FONT_SIZE_NORMAL,
+                color=VSCodeColors.DESCRIPTION_FOREGROUND,
+                italic=True,
+            )
+
+        rows = []
+        for tool_name, stats in sorted(by_tool.items(), key=lambda x: x[1]["calls"], reverse=True):
+            calls = stats["calls"]
+            successes = stats["success"]
+            success_rate = round((successes / calls * 100), 1) if calls > 0 else 0
+            avg_duration = stats["avg_duration_ms"]
+            
+            rows.append(
+                ft.DataRow(
+                    cells=[
+                        ft.DataCell(ft.Text(tool_name, color=VSCodeColors.EDITOR_FOREGROUND)),
+                        ft.DataCell(ft.Text(str(calls), color=VSCodeColors.EDITOR_FOREGROUND)),
+                        ft.DataCell(ft.Text(f"{success_rate}%", color=VSCodeColors.SUCCESS_FOREGROUND if success_rate > 80 else VSCodeColors.WARNING_FOREGROUND)),
+                        ft.DataCell(ft.Text(f"{avg_duration}ms", color=VSCodeColors.EDITOR_FOREGROUND)),
+                    ]
+                )
+            )
+
+        return ft.DataTable(
+            columns=[
+                ft.DataColumn(ft.Text("Tool", weight=ft.FontWeight.BOLD, color=VSCodeColors.EDITOR_FOREGROUND)),
+                ft.DataColumn(ft.Text("Calls", weight=ft.FontWeight.BOLD, color=VSCodeColors.EDITOR_FOREGROUND)),
+                ft.DataColumn(ft.Text("Success Rate", weight=ft.FontWeight.BOLD, color=VSCodeColors.EDITOR_FOREGROUND)),
+                ft.DataColumn(ft.Text("Avg Duration", weight=ft.FontWeight.BOLD, color=VSCodeColors.EDITOR_FOREGROUND)),
+            ],
+            rows=rows,
+            border=ft.border.all(1, VSCodeColors.PANEL_BORDER),
+            border_radius=Spacing.BORDER_RADIUS_SMALL,
+            heading_row_color=VSCodeColors.PANEL_BACKGROUND,
         )
 
     def get_control(self) -> ft.Container:
