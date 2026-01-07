@@ -1,4 +1,4 @@
-<table border="0">
+<table>
   <tr>
     <td valign="middle">
       <h1 style="margin: 0; border: none;">Pulse Agentic IDE</h1>
