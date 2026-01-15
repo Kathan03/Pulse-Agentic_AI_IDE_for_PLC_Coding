@@ -32,6 +32,9 @@ interface EditorState {
 
   // Scroll positions per file (for restoration)
   scrollPositions: Map<string, { top: number; left: number }>;
+
+  // Cursor position for status bar
+  cursorPosition: { line: number; column: number };
 }
 
 // ============================================================================
@@ -73,6 +76,7 @@ interface EditorActions {
   getFile: (path: string) => FileState | undefined;
   isDirty: (path: string) => boolean;
   hasUnsavedChanges: () => boolean;
+  setCursorPosition: (line: number, column: number) => void;
   reset: () => void;
 }
 
@@ -87,6 +91,7 @@ const initialState: EditorState = {
   diffPreviewPath: null,
   pendingPatches: new Map(),
   scrollPositions: new Map(),
+  cursorPosition: { line: 1, column: 1 },
 };
 
 // ============================================================================
@@ -460,6 +465,10 @@ export const useEditorStore = create<EditorState & EditorActions>()(
         if (file.isDirty) return true;
       }
       return false;
+    },
+
+    setCursorPosition: (line, column) => {
+      set({ cursorPosition: { line, column } });
     },
 
     reset: () => {

@@ -7,6 +7,7 @@
 import { AgentChat } from '../agent/AgentChat';
 import { AgentInput } from '../agent/AgentInput';
 import { ModeSelector } from '../agent/ModeSelector';
+import { ModelSelector } from '../agent/ModelSelector';
 import { VibeLoader } from '../vibe/VibeLoader';
 import { useAgentStore, selectIsRunning } from '@/stores/agentStore';
 import { PulseLogo } from '@/components/common/PulseLogo';
@@ -24,7 +25,10 @@ export function AgentPanel() {
             Pulse Agent
           </span>
         </div>
-        <ModeSelector />
+        <div className="flex items-center gap-2">
+          <ModelSelector />
+          <ModeSelector />
+        </div>
       </div>
 
       {/* Chat Messages */}

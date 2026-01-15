@@ -31,6 +31,15 @@ export function EditorTabs() {
   const handleCloseTab = useCallback(
     (e: React.MouseEvent, tab: EditorTab) => {
       e.stopPropagation();
+
+      // Confirm before closing dirty file
+      if (tab.isDirty) {
+        const confirmed = window.confirm(
+          `"${tab.name}" has unsaved changes.\n\nAre you sure you want to close it? Your changes will be lost.`
+        );
+        if (!confirmed) return;
+      }
+
       closeFile(tab.path);
     },
     [closeFile]
@@ -40,6 +49,15 @@ export function EditorTabs() {
     (e: React.MouseEvent, tab: EditorTab) => {
       if (e.button === 1) {
         e.preventDefault();
+
+        // Confirm before closing dirty file
+        if (tab.isDirty) {
+          const confirmed = window.confirm(
+            `"${tab.name}" has unsaved changes.\n\nAre you sure you want to close it? Your changes will be lost.`
+          );
+          if (!confirmed) return;
+        }
+
         closeFile(tab.path);
       }
     },
@@ -112,16 +130,15 @@ function Tab({
         {displayName}
       </span>
 
-      {/* Dirty Indicator or Close Button */}
-      <div className="ml-2 w-4 h-4 flex-shrink-0 flex items-center justify-center">
-        {tab.isDirty ? (
-          <DirtyIndicator />
-        ) : (
-          <CloseButton
-            onClick={onClose}
-            className="opacity-0 group-hover:opacity-100"
-          />
+      {/* Dirty Indicator and Close Button */}
+      <div className="ml-2 w-4 h-4 flex-shrink-0 flex items-center justify-center relative">
+        {tab.isDirty && (
+          <DirtyIndicator className="group-hover:opacity-0 transition-opacity" />
         )}
+        <CloseButton
+          onClick={onClose}
+          className={`absolute inset-0 ${tab.isDirty ? 'opacity-0 group-hover:opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
+        />
       </div>
 
       {/* Active indicator line at bottom */}
@@ -136,9 +153,9 @@ function Tab({
 // Sub-components
 // ============================================================================
 
-function DirtyIndicator() {
+function DirtyIndicator({ className }: { className?: string }) {
   return (
-    <div className="w-2 h-2 rounded-full bg-pulse-fg-muted" />
+    <div className={`w-2 h-2 rounded-full bg-pulse-fg-muted ${className || ''}`} />
   );
 }
 
@@ -152,6 +169,7 @@ function CloseButton({
   return (
     <button
       onClick={onClick}
+      title="Close"
       className={`p-0.5 rounded hover:bg-pulse-bg-tertiary transition-opacity ${className}`}
     >
       <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">

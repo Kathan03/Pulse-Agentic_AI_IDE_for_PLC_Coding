@@ -4,8 +4,9 @@ LLM Client Abstraction for Pulse IDE v2.6 (Phase 1).
 Provides unified interface for OpenAI and Anthropic LLMs with function calling support.
 
 Supported Models:
-- OpenAI: gpt-5.x, gpt-4.1.x series
-- Anthropic: claude-opus-4-5, claude-sonnet-4-5, claude-haiku-4-5
+- OpenAI: gpt-5.x series
+- Anthropic: claude-opus-4-5, claude-sonnet-4-5
+- Google: Gemini 3 series
 
 Features:
 - Function calling / tool use for both providers
@@ -209,23 +210,27 @@ class LLMClient:
         "Hello! How can I help you?"
     """
 
-    # Model provider mapping
+    # Model provider mapping - ONLY user-specified models
     OPENAI_MODELS = [
+        # GPT-5 series
         "gpt-5.2", "gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-5-nano",
-        "gpt-5.1-codex", "gpt-5.2-pro",
-        "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano",
-        "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"
+        "gpt-5.2-codex", "gpt-5.1-codex-max", "gpt-5.1-codex",
+        "gpt-5.2-pro", "gpt-5-pro"
     ]
     ANTHROPIC_MODELS = [
-        "claude-opus-4-5", "claude-sonnet-4-5", "claude-haiku-4-5",
-        "claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-haiku-20240307"
+        # Claude 4.5 series
+        "claude-sonnet-4.5", "claude-opus-4.5"
+    ]
+    GOOGLE_MODELS = [
+        # Gemini 3 series
+        "gemini-3-pro", "gemini-3-flash"
     ]
 
     # Models that use max_completion_tokens (newer OpenAI models)
     NEW_OPENAI_MODELS = [
         "gpt-5.2", "gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-5-nano",
-        "gpt-5.1-codex", "gpt-5.2-pro",
-        "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano"
+        "gpt-5.2-codex", "gpt-5.1-codex-max", "gpt-5.1-codex",
+        "gpt-5.2-pro", "gpt-5-pro"
     ]
 
     # Model parameter compatibility configuration
@@ -265,24 +270,25 @@ class LLMClient:
             "max_tokens_param": "max_tokens",
             "supports_custom_temperature": True,
             "default_temperature": 0.7
+        },
+        # Gemini models
+        "gemini": {
+            "max_tokens_param": "max_output_tokens",
+            "supports_custom_temperature": True,
+            "default_temperature": 0.7
         }
     }
 
     # Pricing per 1M tokens (input_price, output_price) in USD
     # These are approximate prices as of Jan 2026 - update as needed
     MODEL_PRICING = {
+        # GPT-5 series
         "gpt-5": (5.00, 15.00),
-        "gpt-4.1": (2.00, 8.00),
-        "gpt-4o": (2.50, 10.00),
-        "gpt-4o-mini": (0.15, 0.60),
-        "gpt-4-turbo": (10.00, 30.00),
-        "gpt-3.5-turbo": (0.50, 1.50),
-        "claude-opus-4-5": (15.00, 75.00),
-        "claude-sonnet-4-5": (3.00, 15.00),
-        "claude-haiku-4-5": (0.25, 1.25),
-        "claude-3-5-sonnet": (3.00, 15.00),
-        "claude-3-opus": (15.00, 75.00),
-        "claude-3-haiku": (0.25, 1.25),
+        # Claude 4.5 series
+        "claude-opus-4.5": (15.00, 75.00),
+        "claude-sonnet-4.5": (3.00, 15.00),
+        # Gemini 3 series
+        "gemini-3": (2.00, 6.00),
     }
 
     def __init__(self):
@@ -328,7 +334,7 @@ class LLMClient:
             model: Model identifier.
 
         Returns:
-            Provider name ("openai" or "anthropic").
+            Provider name ("openai", "anthropic", or "google").
 
         Raises:
             ValueError: If model not recognized.
@@ -337,12 +343,16 @@ class LLMClient:
             return "openai"
         elif model in self.ANTHROPIC_MODELS:
             return "anthropic"
+        elif model in self.GOOGLE_MODELS:
+            return "google"
         else:
             # Fallback: guess from prefix
             if model.startswith("gpt"):
                 return "openai"
             elif model.startswith("claude"):
                 return "anthropic"
+            elif model.startswith("gemini"):
+                return "google"
             else:
                 raise ValueError(f"Unknown model: {model}")
 

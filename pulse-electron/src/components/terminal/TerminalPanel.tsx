@@ -55,9 +55,10 @@ export function TerminalPanel() {
     brightWhite: '#ffffff',
   }), [theme]);
 
-  // Initialize terminal and PTY
+  // Initialize terminal and PTY - runs when panel becomes visible with no session
   useEffect(() => {
-    if (!containerRef.current || sessionRef.current) return;
+    // Only initialize when panel is visible, container exists, and no session
+    if (!terminalVisible || !containerRef.current || sessionRef.current) return;
 
     const initTerminal = async () => {
       // Check if PTY API is available
@@ -182,7 +183,8 @@ export function TerminalPanel() {
               terminal.write('$ ');
             }
             currentLine = '';
-          } else if (data === '\u007f') {
+          } else if (data === '\x7f') {
+            // Backspace
             if (currentLine.length > 0) {
               currentLine = currentLine.slice(0, -1);
               terminal.write('\b \b');
@@ -191,7 +193,7 @@ export function TerminalPanel() {
             terminal.writeln('^C');
             currentLine = '';
             terminal.write('$ ');
-          } else if (data >= ' ' || data === '\t') {
+          } else { // Handle printable characters and tabs
             currentLine += data;
             terminal.write(data);
           }
@@ -210,7 +212,7 @@ export function TerminalPanel() {
         sessionRef.current = null;
       }
     };
-  }, []); // Only run once on mount
+  }, [terminalVisible, projectRoot, getTerminalTheme]); // Re-run when panel becomes visible
 
   // Update theme when it changes
   useEffect(() => {
@@ -345,9 +347,8 @@ export function TerminalPanel() {
     >
       {/* Resize Handle */}
       <div
-        className={`h-1 cursor-ns-resize transition-colors ${
-          isResizing ? 'bg-pulse-primary' : 'bg-pulse-border hover:bg-pulse-primary'
-        }`}
+        className={`h-1 cursor-ns-resize transition-colors ${isResizing ? 'bg-pulse-primary' : 'bg-pulse-border hover:bg-pulse-primary'
+          }`}
         onMouseDown={handleMouseDown}
       />
 

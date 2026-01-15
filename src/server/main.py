@@ -30,6 +30,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.server.routes.websocket import router as ws_router
 from src.server.routes.health import router as health_router, set_server_start_time
 from src.server.routes.settings import router as settings_router
+from src.server.routes.conversations import router as conversations_router
 from src.server.session import get_session_manager
 from src.core.events import get_event_bus
 
@@ -143,6 +144,7 @@ def create_app() -> FastAPI:
     # ========================================================================
     app.include_router(health_router, prefix="/api", tags=["health"])
     app.include_router(settings_router, prefix="/api", tags=["settings"])
+    app.include_router(conversations_router, tags=["conversations"])
     app.include_router(ws_router, tags=["websocket"])
 
     # ========================================================================

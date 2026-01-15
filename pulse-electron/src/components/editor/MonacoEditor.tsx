@@ -16,7 +16,7 @@ interface MonacoEditorProps {
 
 export function MonacoEditor({ filePath }: MonacoEditorProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
-  const { files, updateFileContent, saveFile, getScrollPosition, setScrollPosition } =
+  const { files, updateFileContent, saveFile, getScrollPosition, setScrollPosition, setCursorPosition } =
     useEditorStore();
 
   const file = files.get(filePath);
@@ -42,10 +42,21 @@ export function MonacoEditor({ filePath }: MonacoEditorProps) {
         saveFile(filePath);
       });
 
+      // Track cursor position for status bar
+      editor.onDidChangeCursorPosition((e) => {
+        setCursorPosition(e.position.lineNumber, e.position.column);
+      });
+
+      // Set initial cursor position
+      const pos = editor.getPosition();
+      if (pos) {
+        setCursorPosition(pos.lineNumber, pos.column);
+      }
+
       // Focus editor
       editor.focus();
     },
-    [filePath, getScrollPosition, saveFile]
+    [filePath, getScrollPosition, saveFile, setCursorPosition]
   );
 
   // Handle content changes
@@ -88,25 +99,26 @@ export function MonacoEditor({ filePath }: MonacoEditorProps) {
       onChange={handleChange}
       onMount={handleEditorMount}
       options={{
+        // Font
         fontSize: 14,
         fontFamily: "'Cascadia Code', Consolas, 'Courier New', monospace",
         fontLigatures: true,
-        // Line numbers configuration
+        // Line numbers - clean configuration
         lineNumbers: 'on',
-        lineNumbersMinChars: 3, // Minimum characters for line number column (reduces width)
-        lineDecorationsWidth: 10, // Width for decorations like breakpoints
-        glyphMarginWidth: 5, // Glyph margin width
+        lineNumbersMinChars: 3,
+        lineDecorationsWidth: 0,
+        glyphMargin: false,
         folding: true,
         foldingHighlight: true,
-        // Minimap
-        minimap: { enabled: true, scale: 1 },
+        // Minimap - DISABLED for cleaner look
+        minimap: { enabled: false },
         // Scrolling
         scrollBeyondLastLine: false,
         smoothScrolling: true,
         // Cursor
         cursorBlinking: 'smooth',
         cursorSmoothCaretAnimation: 'on',
-        // Rendering
+        // Rendering - 'line' instead of 'all' removes the block before cursor
         renderWhitespace: 'selection',
         bracketPairColorization: { enabled: true },
         automaticLayout: true,
@@ -114,14 +126,13 @@ export function MonacoEditor({ filePath }: MonacoEditorProps) {
         tabSize: 4,
         insertSpaces: true,
         padding: { top: 8, bottom: 8 },
-        // Scrollbar
+        // Scrollbar - slim
         scrollbar: {
-          verticalScrollbarSize: 10,
-          horizontalScrollbarSize: 10,
+          verticalScrollbarSize: 8,
+          horizontalScrollbarSize: 8,
         },
-        // Ensure proper rendering
-        fixedOverflowWidgets: true,
-        renderLineHighlight: 'all',
+        // Line highlight - only the line background, no gutter block
+        renderLineHighlight: 'line',
         renderLineHighlightOnlyWhenFocus: false,
       }}
       loading={<EditorLoading />}

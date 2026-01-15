@@ -1,7 +1,7 @@
 /**
  * StatusBar - Bottom Status Strip
  *
- * Displays file info, run status, and other status indicators.
+ * Displays file info, run status, cursor position, and model info.
  */
 
 import { useAgentStore } from '@/stores/agentStore';
@@ -11,6 +11,7 @@ import { useWorkspaceStore } from '@/stores/workspaceStore';
 export function StatusBar() {
   const { mode, runStatus } = useAgentStore();
   const activeFile = useEditorStore(selectActiveFile);
+  const cursorPosition = useEditorStore((s) => s.cursorPosition);
   const { projectRoot } = useWorkspaceStore();
 
   return (
@@ -41,10 +42,10 @@ export function StatusBar() {
           label={`Mode: ${mode.charAt(0).toUpperCase() + mode.slice(1)}`}
         />
 
-        {/* File Info */}
+        {/* File Info with live cursor position */}
         {activeFile && (
           <>
-            <StatusItem label={`Ln ${1}, Col ${1}`} />
+            <StatusItem label={`Ln ${cursorPosition.line}, Col ${cursorPosition.column}`} />
             <StatusItem label={activeFile.language} />
             <StatusItem label="UTF-8" />
           </>

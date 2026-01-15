@@ -31,6 +31,7 @@ export interface Settings {
   api_keys: {
     openai: string;
     anthropic: string;
+    google: string;
   };
   models: {
     master_agent: string;
@@ -51,6 +52,7 @@ export interface Settings {
 export interface APIKeyStatus {
   openai_configured: boolean;
   anthropic_configured: boolean;
+  google_configured: boolean;
 }
 
 /**
@@ -85,7 +87,7 @@ export async function fetchAPIKeyStatus(): Promise<APIKeyStatus> {
  * Update an API key.
  */
 export async function updateAPIKey(
-  provider: 'openai' | 'anthropic',
+  provider: 'openai' | 'anthropic' | 'google',
   apiKey: string
 ): Promise<{ success: boolean; message: string }> {
   const baseUrl = await getBaseUrl();

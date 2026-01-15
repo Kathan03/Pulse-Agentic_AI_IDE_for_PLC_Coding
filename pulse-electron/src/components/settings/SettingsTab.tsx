@@ -2,8 +2,9 @@
  * Settings Tab - VS Code-style Settings Interface
  *
  * Displays as a tab in the editor area with sections for:
- * - API Keys (OpenAI, Anthropic) - stored in platformdirs
+ * - API Keys (OpenAI, Anthropic, Google) - stored in platformdirs
  * - AI Models selection
+ * - Token Usage statistics
  * - Appearance (theme)
  * - Editor preferences
  */
@@ -110,10 +111,11 @@ function SectionButton({
 function APIKeysSettings() {
   const [openaiKey, setOpenaiKey] = useState('');
   const [anthropicKey, setAnthropicKey] = useState('');
+  const [googleKey, setGoogleKey] = useState('');
   const [keyStatus, setKeyStatus] = useState<APIKeyStatus | null>(null);
   const [configPath, setConfigPath] = useState<string>('');
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState<'openai' | 'anthropic' | null>(null);
+  const [saving, setSaving] = useState<'openai' | 'anthropic' | 'google' | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Load initial status
@@ -136,8 +138,8 @@ function APIKeysSettings() {
     loadStatus();
   }, []);
 
-  const handleSaveKey = useCallback(async (provider: 'openai' | 'anthropic') => {
-    const key = provider === 'openai' ? openaiKey : anthropicKey;
+  const handleSaveKey = useCallback(async (provider: 'openai' | 'anthropic' | 'google') => {
+    const key = provider === 'openai' ? openaiKey : provider === 'anthropic' ? anthropicKey : googleKey;
 
     if (!key.trim()) {
       setMessage({ type: 'error', text: 'Please enter an API key' });
@@ -149,13 +151,16 @@ function APIKeysSettings() {
 
     try {
       await updateAPIKey(provider, key.trim());
-      setMessage({ type: 'success', text: `${provider === 'openai' ? 'OpenAI' : 'Anthropic'} API key saved successfully!` });
+      const providerName = provider === 'openai' ? 'OpenAI' : provider === 'anthropic' ? 'Anthropic' : 'Google';
+      setMessage({ type: 'success', text: `${providerName} API key saved successfully!` });
 
       // Clear the input and refresh status
       if (provider === 'openai') {
         setOpenaiKey('');
-      } else {
+      } else if (provider === 'anthropic') {
         setAnthropicKey('');
+      } else {
+        setGoogleKey('');
       }
 
       const status = await fetchAPIKeyStatus();
@@ -165,7 +170,7 @@ function APIKeysSettings() {
     } finally {
       setSaving(null);
     }
-  }, [openaiKey, anthropicKey]);
+  }, [openaiKey, anthropicKey, googleKey]);
 
   if (loading) {
     return (
@@ -246,12 +251,62 @@ function APIKeysSettings() {
           </div>
         </div>
 
+        {/* Google API Key */}
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-2">
+            <h3 className="text-sm font-medium text-pulse-fg">Google API Key</h3>
+            {keyStatus?.google_configured && (
+              <span className="px-2 py-0.5 text-xs bg-green-900/30 text-green-400 rounded">Configured</span>
+            )}
+          </div>
+          <p className="text-xs text-pulse-fg-muted mb-2">
+            Get your API key from <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-pulse-primary hover:underline">aistudio.google.com</a>
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="password"
+              placeholder={keyStatus?.google_configured ? "Enter new key to replace..." : "AIzaSy..."}
+              value={googleKey}
+              onChange={(e) => setGoogleKey(e.target.value)}
+              className="flex-1 px-3 py-2 bg-pulse-input border border-pulse-border rounded text-sm focus:outline-none focus:border-pulse-primary"
+            />
+            <button
+              onClick={() => handleSaveKey('google')}
+              disabled={saving === 'google'}
+              className="px-4 py-2 bg-pulse-primary text-white rounded text-sm hover:bg-pulse-primary/90 disabled:opacity-50"
+            >
+              {saving === 'google' ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
+
         {/* Config Location */}
         <div className="pt-4 border-t border-pulse-border">
           <p className="text-xs text-pulse-fg-muted">
             Settings stored at: <code className="bg-pulse-bg-secondary px-1 rounded">{configPath || 'Loading...'}</code>
           </p>
         </div>
+      </SettingsSection>
+
+      {/* Token Usage Statistics */}
+      <SettingsSection title="Session Token Usage">
+        <div className="grid grid-cols-3 gap-4 mb-4">
+          <div className="bg-pulse-bg-secondary p-4 rounded-lg text-center">
+            <div className="text-2xl font-bold text-pulse-primary">0</div>
+            <div className="text-xs text-pulse-fg-muted mt-1">API Calls</div>
+          </div>
+          <div className="bg-pulse-bg-secondary p-4 rounded-lg text-center">
+            <div className="text-2xl font-bold text-pulse-fg">0</div>
+            <div className="text-xs text-pulse-fg-muted mt-1">Total Tokens</div>
+          </div>
+          <div className="bg-pulse-bg-secondary p-4 rounded-lg text-center">
+            <div className="text-2xl font-bold text-pulse-success">$0.00</div>
+            <div className="text-xs text-pulse-fg-muted mt-1">Est. Cost</div>
+          </div>
+        </div>
+        <p className="text-xs text-pulse-fg-muted">
+          Token usage resets when you restart the application. Cost estimates are approximate.
+        </p>
       </SettingsSection>
     </div>
   );
@@ -409,14 +464,26 @@ function AgentSettings() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Available models
-  const availableModels = [
-    'gpt-4o',
-    'gpt-4o-mini',
-    'gpt-4-turbo',
-    'claude-3-5-sonnet-20241022',
-    'claude-3-5-haiku-20241022',
-    'claude-3-opus-20240229',
+  // Available models - ONLY user-specified models
+  const availableModels = {
+    openai: [
+      'gpt-5.2', 'gpt-5.1', 'gpt-5', 'gpt-5-mini', 'gpt-5-nano',
+      'gpt-5.2-codex', 'gpt-5.1-codex-max', 'gpt-5.1-codex',
+      'gpt-5.2-pro', 'gpt-5-pro'
+    ],
+    anthropic: [
+      'claude-sonnet-4.5', 'claude-opus-4.5'
+    ],
+    google: [
+      'gemini-3-pro', 'gemini-3-flash'
+    ]
+  };
+
+  // Flatten for dropdown
+  const allModels = [
+    ...availableModels.openai,
+    ...availableModels.anthropic,
+    ...availableModels.google
   ];
 
   useEffect(() => {
@@ -496,12 +563,13 @@ function AgentSettings() {
           description="The primary model for agent orchestration"
         >
           <select
-            value={settings?.models.master_agent || 'gpt-4o'}
+            value={settings?.models.master_agent || 'gpt-5'}
             onChange={(e) => handleModelChange('master_agent', e.target.value)}
             disabled={saving}
-            className="w-48 px-3 py-1.5 bg-pulse-input border border-pulse-border rounded text-sm focus:outline-none focus:border-pulse-primary disabled:opacity-50"
+            title="Select Master Agent Model"
+            className="w-52 px-3 py-1.5 bg-pulse-input border border-pulse-border rounded text-sm focus:outline-none focus:border-pulse-primary disabled:opacity-50"
           >
-            {availableModels.map((m) => (
+            {allModels.map((m) => (
               <option key={m} value={m}>{m}</option>
             ))}
           </select>
@@ -512,12 +580,13 @@ function AgentSettings() {
           description="Model for the CrewAI code generation agent"
         >
           <select
-            value={settings?.models.crew_coder || 'gpt-4o-mini'}
+            value={settings?.models.crew_coder || 'gpt-5-mini'}
             onChange={(e) => handleModelChange('crew_coder', e.target.value)}
             disabled={saving}
-            className="w-48 px-3 py-1.5 bg-pulse-input border border-pulse-border rounded text-sm focus:outline-none focus:border-pulse-primary disabled:opacity-50"
+            title="Select CrewAI Coder Model"
+            className="w-52 px-3 py-1.5 bg-pulse-input border border-pulse-border rounded text-sm focus:outline-none focus:border-pulse-primary disabled:opacity-50"
           >
-            {availableModels.map((m) => (
+            {allModels.map((m) => (
               <option key={m} value={m}>{m}</option>
             ))}
           </select>
@@ -528,12 +597,13 @@ function AgentSettings() {
           description="Model for the AutoGen code auditing agent"
         >
           <select
-            value={settings?.models.autogen_auditor || 'gpt-4o-mini'}
+            value={settings?.models.autogen_auditor || 'gpt-5-mini'}
             onChange={(e) => handleModelChange('autogen_auditor', e.target.value)}
             disabled={saving}
-            className="w-48 px-3 py-1.5 bg-pulse-input border border-pulse-border rounded text-sm focus:outline-none focus:border-pulse-primary disabled:opacity-50"
+            title="Select AutoGen Auditor Model"
+            className="w-52 px-3 py-1.5 bg-pulse-input border border-pulse-border rounded text-sm focus:outline-none focus:border-pulse-primary disabled:opacity-50"
           >
-            {availableModels.map((m) => (
+            {allModels.map((m) => (
               <option key={m} value={m}>{m}</option>
             ))}
           </select>
