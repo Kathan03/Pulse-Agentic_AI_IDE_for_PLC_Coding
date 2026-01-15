@@ -5,6 +5,8 @@
  */
 
 import type { Message } from '@/stores/agentStore';
+// import { FoxMascot } from '@/components/common/FoxMascot';
+import { PulseLogo } from '@/components/common/PulseLogo';
 
 interface AgentMessageProps {
   message: Message;
@@ -26,8 +28,8 @@ export function AgentMessage({ message }: AgentMessageProps) {
         {/* Avatar row */}
         {!isUser && (
           <div className="flex items-center mb-1.5">
-            <div className="w-5 h-5 rounded-full bg-pulse-primary flex items-center justify-center mr-2">
-              <PulseIcon />
+            <div className="w-5 h-5 rounded-full  flex items-center justify-center mr-2">
+              <PulseLogo size={40} />
             </div>
             <span className="text-xs font-medium text-pulse-fg-muted">
               {isSystem ? 'System' : 'Pulse'}
@@ -145,15 +147,6 @@ function formatTime(timestamp: number): string {
 // ============================================================================
 // Icons
 // ============================================================================
-
-function PulseIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="white" className="w-3 h-3">
-      <path d="M2 8h2l1.5-3 2 6 2-8 2 5 1.5-2H14" stroke="white" strokeWidth="1.5" fill="none" />
-    </svg>
-  );
-}
-
 function ToolIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3 text-pulse-fg-muted">

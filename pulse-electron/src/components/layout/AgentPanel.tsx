@@ -19,7 +19,7 @@ export function AgentPanel() {
       {/* Header */}
       <div className="h-9 px-3 flex items-center justify-between border-b border-pulse-border">
         <div className="flex items-center gap-2">
-          <PulseLogo size={55} />
+          <PulseLogo size={35} />
           <span className="text-xs font-semibold uppercase tracking-wide text-pulse-fg-muted">
             Pulse Agent
           </span>
