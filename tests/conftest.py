@@ -267,16 +267,10 @@ def cleanup_global_state():
     """
     yield
 
-    # Reset UIBridge singleton
-    try:
-        from src.ui.bridge import reset_ui_bridge
-        reset_ui_bridge()
-    except ImportError:
-        pass
-
     # Reset process registry
     try:
         from src.core.processes import _process_registry
         _process_registry.clear()
     except (ImportError, NameError):
         pass
+

@@ -154,6 +154,20 @@ export const useWorkspaceStore = create<WorkspaceState & WorkspaceActions>()(
         // Get workspace name from path
         const name = path.split(/[\\/]/).pop() || path;
 
+        // Initialize .pulse directory on backend
+        try {
+          const backendPort = await window.pulseAPI.backend?.getPort() || 8765;
+          await fetch(`http://localhost:${backendPort}/api/workspace/init`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ project_root: path })
+          });
+          console.log('[Workspace] Backend .pulse directory initialized');
+        } catch (initError) {
+          // Non-fatal: backend might not be running yet
+          console.warn('[Workspace] Backend workspace init failed (non-fatal):', initError);
+        }
+
         // Load initial file tree
         const fileTree = await buildTreeNode(path);
 

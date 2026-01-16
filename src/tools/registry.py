@@ -488,6 +488,13 @@ class ToolRegistry:
             >>> result.next_steps
             ["Read the most relevant files", "Refine search if results are too broad", ...]
         """
+        # ═══════════════════════════════════════════════════════════════════
+        # TOOL INVOCATION - Log prominently for visibility
+        # ═══════════════════════════════════════════════════════════════════
+        print(f"\n{'='*60}")
+        print(f"🔧 TOOL CALL: {tool_name}")
+        print(f"   Args: {args}")
+        print(f"{'='*60}")
         logger.info(f"Invoking tool: {tool_name} with args: {args}")
 
         try:
@@ -551,6 +558,11 @@ class ToolRegistry:
                 # E3: Log analytics for raw result (assumed success)
                 duration_ms = int((time.perf_counter() - start_time) * 1000)
                 log_tool_usage(tool_name, True, duration_ms, None, self.project_root)
+
+                # Log tool completion
+                print(f"✅ TOOL COMPLETE: {tool_name}")
+                print(f"   Summary: {summary}")
+                print(f"{'='*60}\n")
 
                 return ToolOutput(
                     tool_name=tool_name,

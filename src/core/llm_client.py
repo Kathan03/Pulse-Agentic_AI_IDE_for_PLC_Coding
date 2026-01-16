@@ -283,12 +283,22 @@ class LLMClient:
     # These are approximate prices as of Jan 2026 - update as needed
     MODEL_PRICING = {
         # GPT-5 series
-        "gpt-5": (5.00, 15.00),
+        "gpt-5.2": (1.75, 14.00),
+        "gpt-5.1": (1.25, 10.00),
+        "gpt-5": (1.25, 10.00),
+        "gpt-5-mini": (0.25, 2.00),
+        "gpt-5-nano": (0.05, 0.40),
+        "gpt-5.2-codex": (1.75, 14.00),
+        "gpt-5.1-codex-max": (1.25, 10.00),
+        "gpt-5.1-codex": (1.25, 10.00),
+        "gpt-5.2-pro": (21.00, 168.00),
+        "gpt-5-pro": (15.00, 120.00),
         # Claude 4.5 series
-        "claude-opus-4.5": (15.00, 75.00),
+        "claude-opus-4.5": (5.00, 25.00),
         "claude-sonnet-4.5": (3.00, 15.00),
         # Gemini 3 series
-        "gemini-3": (2.00, 6.00),
+        "gemini-3-pro": (3.00, 15.00), #Took everage
+        "gemini-3-flash": (0.50, 3.00),
     }
 
     def __init__(self):
@@ -639,8 +649,8 @@ class LLMClient:
                 # Handle temperature parameter errors
                 if "temperature" in error_message:
                     logger.warning(f"Temperature parameter error, using default")
-                    # Some models only support default temperature (1.0 for GPT-5/4.1)
-                    if "gpt-5" in model or "gpt-4.1" in model:
+                    # Some models only support default temperature (1.0 for GPT-5)
+                    if "gpt-5" in model:
                         params["temperature"] = 1.0
                         logger.info(f"Retrying with default temperature=1.0 for {model}")
                     else:
