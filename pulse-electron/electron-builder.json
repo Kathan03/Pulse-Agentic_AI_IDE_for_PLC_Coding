@@ -1,6 +1,6 @@
 {
   "appId": "com.pulse.ide",
-  "productName": "Pulse IDE",
+  "productName": "Pulse",
   "directories": {
     "buildResources": "build",
     "output": "release"
@@ -13,30 +13,41 @@
     {
       "from": "../backend-dist",
       "to": "backend",
-      "filter": ["**/*"]
+      "filter": [
+        "**/*"
+      ]
     },
     {
       "from": "../assets",
       "to": "assets",
-      "filter": ["**/*"]
+      "filter": [
+        "**/*"
+      ]
     }
   ],
   "win": {
     "target": [
       {
         "target": "nsis",
-        "arch": ["x64"]
+        "arch": [
+          "x64"
+        ]
       }
     ],
     "icon": "../assets/pulse_icon_bg_020321.ico",
-    "artifactName": "${productName}-${version}-${arch}.${ext}"
+    "artifactName": "Pulse-Setup-${version}.${ext}"
   },
   "nsis": {
     "oneClick": false,
     "allowToChangeInstallationDirectory": true,
     "deleteAppDataOnUninstall": false,
-    "createDesktopShortcut": true,
-    "createStartMenuShortcut": true
+    "createDesktopShortcut": "always",
+    "createStartMenuShortcut": true,
+    "shortcutName": "Pulse",
+    "uninstallDisplayName": "Pulse IDE",
+    "installerIcon": "../assets/pulse_icon_bg_020321.ico",
+    "uninstallerIcon": "../assets/pulse_icon_bg_020321.ico",
+    "installerHeaderIcon": "../assets/pulse_icon_bg_020321.ico"
   },
   "extraMetadata": {
     "main": "dist-electron/main.js"

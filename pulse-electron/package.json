@@ -1,6 +1,6 @@
 {
   "name": "pulse-electron",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Pulse IDE - Agentic AI IDE for PLC Coding",
   "main": "dist-electron/main.js",
   "author": "Pulse Team",
