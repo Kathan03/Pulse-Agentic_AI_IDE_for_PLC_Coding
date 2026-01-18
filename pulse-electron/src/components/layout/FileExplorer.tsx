@@ -333,8 +333,8 @@ export function FileExplorer() {
           x={contextMenu.x}
           y={contextMenu.y}
           node={contextMenu.node}
-          onNewFile={() => handleNewFile(contextMenu.node!.isDirectory ? contextMenu.node!.path : contextMenu.node!.path.split(/[\\\/]/).slice(0, -1).join(window.pulseAPI.platform === 'win32' ? '\\' : '/'))}
-          onNewFolder={() => handleNewFolder(contextMenu.node!.isDirectory ? contextMenu.node!.path : contextMenu.node!.path.split(/[\\\/]/).slice(0, -1).join(window.pulseAPI.platform === 'win32' ? '\\' : '/'))}
+          onNewFile={() => handleNewFile(contextMenu.node!.isDirectory ? contextMenu.node!.path : contextMenu.node!.path.split(/[/\\]/).slice(0, -1).join(window.pulseAPI.platform === 'win32' ? '\\' : '/'))}
+          onNewFolder={() => handleNewFolder(contextMenu.node!.isDirectory ? contextMenu.node!.path : contextMenu.node!.path.split(/[/\\]/).slice(0, -1).join(window.pulseAPI.platform === 'win32' ? '\\' : '/'))}
           onRename={() => handleRename(contextMenu.node!.path, contextMenu.node!.name)}
           onDelete={() => handleDelete(contextMenu.node!.path, contextMenu.node!.isDirectory)}
           onCopyPath={() => handleCopyPath(contextMenu.node!.path)}

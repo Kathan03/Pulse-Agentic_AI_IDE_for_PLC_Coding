@@ -19,7 +19,6 @@ import type {
   RunResultPayload,
   ErrorPayload,
   PatchApprovalData,
-  TerminalApprovalData,
 } from '@/types/websocket';
 
 const DEFAULT_WS_PORT = 8765;

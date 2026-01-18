@@ -95,7 +95,6 @@ export function ModelSelector() {
                             {AVAILABLE_MODELS.filter(m => m.startsWith('gpt')).map(model => (
                                 <ModelOption
                                     key={model}
-                                    model={model}
                                     displayName={getDisplayName(model)}
                                     isSelected={model === currentModel}
                                     onClick={() => handleModelChange(model)}
@@ -109,7 +108,6 @@ export function ModelSelector() {
                             {AVAILABLE_MODELS.filter(m => m.startsWith('claude')).map(model => (
                                 <ModelOption
                                     key={model}
-                                    model={model}
                                     displayName={getDisplayName(model)}
                                     isSelected={model === currentModel}
                                     onClick={() => handleModelChange(model)}
@@ -123,7 +121,6 @@ export function ModelSelector() {
                             {AVAILABLE_MODELS.filter(m => m.startsWith('gemini')).map(model => (
                                 <ModelOption
                                     key={model}
-                                    model={model}
                                     displayName={getDisplayName(model)}
                                     isSelected={model === currentModel}
                                     onClick={() => handleModelChange(model)}
@@ -138,12 +135,10 @@ export function ModelSelector() {
 }
 
 function ModelOption({
-    model,
     displayName,
     isSelected,
     onClick,
 }: {
-    model: string;
     displayName: string;
     isSelected: boolean;
     onClick: () => void;

@@ -98,7 +98,7 @@ export class PulseWebSocket {
           }
         };
 
-        this.ws.onerror = (event) => {
+        this.ws.onerror = (_event) => {
           console.error('[WebSocket] Error event received');
           const error = new Error('WebSocket connection failed. Is the Python server running?');
           this.events.onError(error);

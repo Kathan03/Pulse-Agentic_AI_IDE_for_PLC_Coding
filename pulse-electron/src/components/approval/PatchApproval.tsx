@@ -5,8 +5,7 @@
  */
 
 import { useState } from 'react';
-import type { Approval, PatchApproval as PatchApprovalType } from '@/stores/approvalStore';
-import type { PatchApprovalData } from '@/types/websocket';
+import type { Approval } from '@/stores/approvalStore';
 import { useEditorStore } from '@/stores/editorStore';
 
 interface PatchApprovalProps {

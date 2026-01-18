@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { useAgentStore, type Message } from '@/stores/agentStore';
+import { useAgentStore } from '@/stores/agentStore';
 import { AgentMessage } from './AgentMessage';
 import { FoxMascot } from '@/components/common/FoxMascot';
 

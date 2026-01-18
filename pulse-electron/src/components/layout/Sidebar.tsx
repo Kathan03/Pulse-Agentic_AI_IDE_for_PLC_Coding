@@ -245,7 +245,7 @@ async function searchInFiles(
       try {
         const content = await window.pulseAPI.fs.readFile(filePath);
         const lines = content.split('\n');
-        const fileName = filePath.split(/[\\/]/).pop() || filePath;
+        const fileName = filePath.split(/[/\\]/).pop() || filePath;
 
         for (let i = 0; i < lines.length && results.length < maxResults; i++) {
           const line = lines[i];

@@ -73,7 +73,7 @@ export function ChatHistory() {
             });
 
             if (response.ok) {
-                const data = await response.json();
+                await response.json(); // Consume response but don't need data
                 clearMessages();
                 // The websocket will handle setting the new conversation ID
                 setIsOpen(false);

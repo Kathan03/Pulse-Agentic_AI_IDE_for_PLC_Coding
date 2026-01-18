@@ -9,8 +9,8 @@ import { useWorkspaceStore } from '@/stores/workspaceStore';
 import { useEditorStore } from '@/stores/editorStore';
 
 export function useFileSystem() {
-  const { projectRoot, refreshFileTree } = useWorkspaceStore();
-  const { files, updateFileContent, openFile, closeFile } = useEditorStore();
+  const { refreshFileTree } = useWorkspaceStore();
+  const { files, updateFileContent, closeFile } = useEditorStore();
 
   // Handle file changes from file watcher
   const handleFileChange = useCallback(

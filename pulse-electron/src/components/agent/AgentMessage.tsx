@@ -81,7 +81,7 @@ function MessageContent({ content }: { content: string }) {
       {parts.map((part, idx) => {
         if (part.startsWith('```')) {
           const lines = part.slice(3, -3).split('\n');
-          const language = lines[0] || 'text';
+          // First line is language identifier, rest is code
           const code = lines.slice(1).join('\n');
           return (
             <pre

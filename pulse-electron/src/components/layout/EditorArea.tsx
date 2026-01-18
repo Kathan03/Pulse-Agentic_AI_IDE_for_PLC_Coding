@@ -12,7 +12,7 @@ import { PulseLogo } from '@/components/common/PulseLogo';
 
 
 export function EditorArea() {
-  const { tabs, activeFilePath } = useEditorStore();
+  const { tabs } = useEditorStore();
   const { projectRoot } = useWorkspaceStore();
 
   // No files open - show welcome

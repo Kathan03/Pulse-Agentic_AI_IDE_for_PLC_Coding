@@ -180,7 +180,7 @@ export function registerStructuredTextLanguage(monaco: typeof import('monaco-edi
         // Operators
         [/:=/, 'operator'],
         [/[<>=!]+/, 'operator'],
-        [/[+\-*\/]/, 'operator'],
+        [/[+\-*/]/, 'operator'],
 
         // Delimiters
         [/[;,.]/, 'delimiter'],

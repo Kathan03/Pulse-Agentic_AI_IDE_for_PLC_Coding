@@ -46,42 +46,45 @@ class TestTokenUsage:
 class TestLLMClientCostCalculation:
     """Tests for LLMClient._calculate_cost method."""
 
-    def test_calculate_cost_gpt4o(self):
-        """Test cost calculation for GPT-4o model."""
+    def test_calculate_cost_gpt5(self):
+        """Test cost calculation for GPT-5 model."""
         client = LLMClient.__new__(LLMClient)  # Create without __init__
         
-        # GPT-4o: $2.50/1M input, $10.00/1M output
+        # GPT-5: $1.25/1M input, $10.00/1M output
         cost = client._calculate_cost(
-            model="gpt-4o",
+            model="gpt-5",
             prompt_tokens=1000,
             completion_tokens=500
         )
         
-        # Expected: (1000/1M * 2.50) + (500/1M * 10.00) = 0.0025 + 0.005 = 0.0075
-        assert cost == pytest.approx(0.0075, abs=0.0001)
+        # Expected: (1000/1M * 1.25) + (500/1M * 10.00) = 0.00125 + 0.005 = 0.00625
+        assert cost == pytest.approx(0.00625, abs=0.0001)
 
-    def test_calculate_cost_gpt4o_mini(self):
-        """Test cost calculation for GPT-4o-mini model."""
+    def test_calculate_cost_gpt5_mini(self):
+        """Test cost calculation for GPT-5-mini model.
+        
+        Note: Due to prefix matching, gpt-5-mini matches "gpt-5" first in dict
+        iteration, so it uses gpt-5 pricing ($1.25/1M input, $10.00/1M output).
+        """
         client = LLMClient.__new__(LLMClient)
         
-        # GPT-4o-mini matches gpt-4o prefix: $2.50/1M input, $10.00/1M output
-        # Note: prefix matching means gpt-4o-mini uses gpt-4o pricing
+        # gpt-5-mini matches "gpt-5" prefix: $1.25/1M input, $10.00/1M output
         cost = client._calculate_cost(
-            model="gpt-4o-mini",
+            model="gpt-5-mini",
             prompt_tokens=10000,
             completion_tokens=2000
         )
         
-        # Expected: (10000/1M * 2.50) + (2000/1M * 10.00) = 0.025 + 0.020 = 0.045
-        assert cost == pytest.approx(0.045, abs=0.001)
+        # Expected: (10000/1M * 1.25) + (2000/1M * 10.00) = 0.0125 + 0.020 = 0.0325
+        assert cost == pytest.approx(0.0325, abs=0.001)
 
-    def test_calculate_cost_claude_sonnet(self):
-        """Test cost calculation for Claude Sonnet model."""
+    def test_calculate_cost_claude_sonnet_45(self):
+        """Test cost calculation for Claude Sonnet 4.5 model."""
         client = LLMClient.__new__(LLMClient)
         
         # Claude Sonnet 4.5: $3.00/1M input, $15.00/1M output
         cost = client._calculate_cost(
-            model="claude-sonnet-4-5",
+            model="claude-sonnet-4.5",
             prompt_tokens=5000,
             completion_tokens=1000
         )

@@ -6,13 +6,13 @@
 
 import { useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useApprovalStore, type Approval } from '@/stores/approvalStore';
+import { useApprovalStore } from '@/stores/approvalStore';
 import { usePulseAgent } from '@/hooks/usePulseAgent';
 import { PatchApproval } from './PatchApproval';
 import { TerminalApproval } from './TerminalApproval';
 
 export function ApprovalOverlay() {
-  const { isModalOpen, currentApproval, closeModal } = useApprovalStore();
+  const { isModalOpen, currentApproval } = useApprovalStore();
   const { approveAction, denyAction } = usePulseAgent({ autoConnect: false });
 
   // Handle escape key

@@ -215,10 +215,9 @@ async function startPythonBackend(): Promise<number> {
     });
 
     let portFound = false;
-    let startupTimeout: NodeJS.Timeout;
 
     // Set a timeout for backend startup
-    startupTimeout = setTimeout(() => {
+    const startupTimeout = setTimeout(() => {
       if (!portFound) {
         console.error('[Backend] Startup timeout - no port received');
         reject(new Error('Backend startup timeout'));
