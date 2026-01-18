@@ -83,7 +83,7 @@ export function useMenuActions(): void {
       unsubscribeFile();
       unsubscribeFolder();
     };
-  }, [openFile, openWorkspace, toggleSidebar, toggleAgentPanel, toggleTerminal]);
+  }, [openFile, openWorkspace, toggleSidebar, toggleAgentPanel, toggleTerminal, activeFilePath, saveFile]);
 
 
 }
