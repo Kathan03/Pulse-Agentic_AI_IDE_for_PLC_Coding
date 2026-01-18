@@ -172,6 +172,7 @@ git push origin v0.1.0
 2. Download `Pulse-Setup-{version}.exe`
 3. Run the installer
 4. Configure your API keys in Settings
+5. Start Using Pulse
 
 ### Option 2: Build from Source
 
@@ -198,7 +199,7 @@ python -m src.server.main  # In another terminal
 
 ## ⚙️ Configuration
 
-Configure your API keys in the Settings panel (or via `.env` file):
+Configure your API keys in the Settings panel:
 
 ```env
 OPENAI_API_KEY=sk-...
@@ -238,8 +239,6 @@ Pulse/
 - [ ] **macOS and Linux Builds**: Cross-platform installers
 - [ ] **Local LLM Support**: Ollama, LM Studio integration
 
-See [FUTURE_OPTIMIZATIONS.md](docs/FUTURE_OPTIMIZATIONS.md) for the complete roadmap.
-
 ---
 
 ## 📜 License
@@ -249,6 +248,7 @@ MIT License - see [LICENSE](LICENSE) for details.
 ---
 
 <div align="center">
-  <p>Built with ❤️ by <b>Kathan</b></p>
-  <p><i>Demonstrating expertise in AI/ML Engineering, Full-Stack Development, and DevOps</i></p>
+  <p>Architecrued, Designed and Built with ❤️ by <b>Kathan</b></p>
+  <p><i>Top 1% AI Engineer with Product Vision. I designed, architected, and built a complex multi‑agent AI system end‑to‑end, focusing on performance at every layer - from optimizing retrieval pipelines and model orchestration to crafting a clean backend architecture that scales smoothly. Along the way, I wrote the PRD, ran user tests, and shaped the product experience to make sure the technology actually solved real problems for real people.</i></p>
 </div>
+
