@@ -97,15 +97,57 @@ class RAGManager:
             )
         )
 
+        # Get embedding function - use bundled models if running in packaged mode
+        embedding_function = self._get_embedding_function()
+        
         self.collection = self.client.get_or_create_collection(
             name="pulse_workspace",
-            metadata={"description": "Workspace semantic search"}
+            metadata={"description": "Workspace semantic search"},
+            embedding_function=embedding_function
         )
 
         # Initialize SQLite freshness tracking
         self._init_freshness_db()
 
         logger.info(f"RAGManager initialized for: {self.project_root}")
+
+    def _get_embedding_function(self):
+        """
+        Get embedding function, using bundled models in packaged mode.
+        
+        Returns:
+            ChromaDB embedding function or None (uses default).
+        """
+        import sys
+        import os
+        
+        # Check if running as PyInstaller bundle
+        if getattr(sys, 'frozen', False):
+            # Running as packaged executable
+            bundled_models_dir = os.path.join(sys._MEIPASS, 'chroma_onnx_models')
+            
+            if os.path.exists(bundled_models_dir):
+                logger.info(f"Using bundled ONNX models from: {bundled_models_dir}")
+                
+                try:
+                    # Set environment variable for ONNX models location
+                    # ChromaDB's ONNXMiniLM_L6_V2 checks this
+                    os.environ['CHROMA_ONNX_MODEL_PATH'] = bundled_models_dir
+                    
+                    from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2
+                    return ONNXMiniLM_L6_V2(
+                        preferred_providers=["CPUExecutionProvider"]
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to load bundled ONNX models: {e}")
+                    logger.warning("Falling back to default embedding function")
+            else:
+                logger.warning(f"Bundled models directory not found: {bundled_models_dir}")
+                logger.warning("RAG search may fail or be slow on first use")
+        
+        # Development mode or fallback - use default (may download model)
+        return None
+
 
     def _init_freshness_db(self) -> None:
         """Initialize SQLite database for freshness tracking."""
@@ -466,25 +508,24 @@ def search_workspace(
     """
     logger.info(f"Searching workspace for: {query}")
 
-    try:
+    import concurrent.futures
+    
+    def _do_search() -> List[Dict[str, Any]]:
+        """Inner function for timeout-protected search."""
         rag = RAGManager(project_root)
-
-        # Ensure index is fresh
         rag.index_workspace()
-
-        # Query ChromaDB
+        
         results = rag.collection.query(
             query_texts=[query],
             n_results=k
         )
-
-        # Format results
+        
         formatted_results = []
         if results and results["documents"] and results["documents"][0]:
             for i, doc in enumerate(results["documents"][0]):
                 metadata = results["metadatas"][0][i] if results["metadatas"] else {}
                 distance = results["distances"][0][i] if results.get("distances") else None
-
+                
                 formatted_results.append({
                     "file_path": metadata.get("file_path", "unknown"),
                     "content": doc,
@@ -492,10 +533,23 @@ def search_workspace(
                     "total_chunks": metadata.get("total_chunks", 1),
                     "distance": distance,
                 })
-
-        logger.info(f"Found {len(formatted_results)} results for: {query}")
+        
         return formatted_results
 
+    try:
+        # Use ThreadPoolExecutor with timeout to prevent indefinite hangs
+        # Issue #4 fix: ChromaDB may hang downloading embedding models in packaged mode
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_do_search)
+            try:
+                result = future.result(timeout=30)  # 30 second timeout
+                logger.info(f"Found {len(result)} results for: {query}")
+                return result
+            except concurrent.futures.TimeoutError:
+                logger.error("Workspace search timed out after 30 seconds")
+                logger.warning("RAG initialization may be stuck (e.g., downloading embedding models)")
+                return []
+                
     except Exception as e:
         logger.error(f"Workspace search failed: {e}", exc_info=True)
         return []

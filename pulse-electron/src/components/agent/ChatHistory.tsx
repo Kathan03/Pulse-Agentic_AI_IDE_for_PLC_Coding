@@ -18,7 +18,20 @@ interface Conversation {
     first_message?: string | null;
 }
 
-const API_BASE_URL = 'http://127.0.0.1:8765';
+const DEFAULT_PORT = 8765;
+
+// Get dynamic base URL for API calls
+async function getBaseUrl(): Promise<string> {
+    let port = DEFAULT_PORT;
+    try {
+        if (window.pulseAPI?.backend?.getPort) {
+            port = await window.pulseAPI.backend.getPort();
+        }
+    } catch (error) {
+        console.warn('[ChatHistory] Failed to get backend port, using default:', error);
+    }
+    return `http://127.0.0.1:${port}`;
+}
 
 export function ChatHistory() {
     const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -39,8 +52,9 @@ export function ChatHistory() {
                 return;
             }
 
+            const baseUrl = await getBaseUrl();
             const encodedPath = encodeURIComponent(projectRoot);
-            const response = await fetch(`${API_BASE_URL}/api/conversations?limit=20&project_root=${encodedPath}`);
+            const response = await fetch(`${baseUrl}/api/conversations?limit=20&project_root=${encodedPath}`);
             if (response.ok) {
                 const data = await response.json();
                 setConversations(data);
@@ -64,23 +78,12 @@ export function ChatHistory() {
     }, [isOpen, fetchConversations]);
 
     // Create new conversation
-    const handleNewChat = async () => {
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/conversations`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title: null }),
-            });
-
-            if (response.ok) {
-                await response.json(); // Consume response but don't need data
-                clearMessages();
-                // The websocket will handle setting the new conversation ID
-                setIsOpen(false);
-            }
-        } catch (error) {
-            console.error('Failed to create conversation:', error);
-        }
+    const handleNewChat = () => {
+        // Simply clear messages like AgentPanel's "+" button does
+        // New conversation will be created automatically on first message
+        // This avoids the 500 error from backend's /api/conversations POST
+        clearMessages();
+        setIsOpen(false);
     };
 
     // Load existing conversation
@@ -90,8 +93,9 @@ export function ChatHistory() {
                 console.error('No project root set');
                 return;
             }
+            const baseUrl = await getBaseUrl();
             const encodedPath = encodeURIComponent(projectRoot);
-            const response = await fetch(`${API_BASE_URL}/api/conversations/${conv.id}?project_root=${encodedPath}`);
+            const response = await fetch(`${baseUrl}/api/conversations/${conv.id}?project_root=${encodedPath}`);
             if (response.ok) {
                 const data = await response.json();
                 clearMessages();
@@ -127,8 +131,9 @@ export function ChatHistory() {
         }
 
         try {
+            const baseUrl = await getBaseUrl();
             const encodedPath = encodeURIComponent(projectRoot);
-            const response = await fetch(`${API_BASE_URL}/api/conversations/${convId}?project_root=${encodedPath}`, {
+            const response = await fetch(`${baseUrl}/api/conversations/${convId}?project_root=${encodedPath}`, {
                 method: 'DELETE',
             });
 

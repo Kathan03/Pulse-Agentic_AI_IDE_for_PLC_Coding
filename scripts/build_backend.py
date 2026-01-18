@@ -7,6 +7,10 @@ with the Electron app.
 
 Usage:
     python scripts/build_backend.py
+    
+Prerequisites:
+    Run 'python scripts/download_chromadb_models.py' first to ensure
+    the embedding models are cached locally.
 """
 
 import os
@@ -19,6 +23,9 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent.parent
 SRC_DIR = PROJECT_ROOT / "src"
 OUTPUT_DIR = PROJECT_ROOT / "backend-dist"
+
+# ChromaDB ONNX model cache directory
+CHROMA_CACHE_DIR = Path.home() / ".cache" / "chroma" / "onnx_models"
 
 # PyInstaller options
 PYINSTALLER_OPTIONS = [
@@ -52,7 +59,31 @@ PYINSTALLER_OPTIONS = [
     "--hidden-import=langchain_core",
     "--hidden-import=langchain_openai",
     "--hidden-import=langchain_anthropic",
+    # ChromaDB and ONNX dependencies
+    "--hidden-import=chromadb",
+    "--hidden-import=chromadb.utils.embedding_functions",
+    "--hidden-import=onnxruntime",
+    "--hidden-import=tokenizers",
 ]
+
+
+def get_chroma_data_options():
+    """Get PyInstaller --add-data options for ChromaDB ONNX models."""
+    data_options = []
+    
+    if CHROMA_CACHE_DIR.exists():
+        # Bundle the entire ONNX models directory
+        # Format: source;destination (Windows uses ; as separator)
+        separator = ";" if sys.platform == "win32" else ":"
+        data_options.append(
+            f"--add-data={CHROMA_CACHE_DIR}{separator}chroma_onnx_models"
+        )
+        print(f"  Bundling ChromaDB models from: {CHROMA_CACHE_DIR}")
+    else:
+        print(f"  Warning: ChromaDB model cache not found at {CHROMA_CACHE_DIR}")
+        print(f"  Run 'python scripts/download_chromadb_models.py' first!")
+    
+    return data_options
 
 
 def clean_output():
@@ -74,14 +105,19 @@ def build_backend():
         print(f"Error: Entry point not found: {entry_point}")
         sys.exit(1)
 
-    # Build command
+    # Get ChromaDB model bundling options
+    print("\nChecking ChromaDB models...")
+    chroma_data_options = get_chroma_data_options()
+
+    # Build command with all options
     cmd = [
         sys.executable, "-m", "PyInstaller",
         *PYINSTALLER_OPTIONS,
+        *chroma_data_options,  # Include bundled models
         str(entry_point)
     ]
 
-    print(f"Running: {' '.join(cmd[:5])}...")
+    print(f"\nRunning PyInstaller...")
 
     try:
         subprocess.run(cmd, check=True, cwd=PROJECT_ROOT)

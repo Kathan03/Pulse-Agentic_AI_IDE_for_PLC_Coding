@@ -406,6 +406,38 @@ export function usePulseAgent(options: UsePulseAgentOptions = {}): UsePulseAgent
       console.warn('[usePulseAgent] Failed to get backend port, using default:', error);
     }
 
+    // Wait for backend to be ready (Issue #1 fix: health polling)
+    const maxRetries = 30; // 30 retries x 1 second = 30 seconds max wait
+    const healthUrl = `http://127.0.0.1:${sharedPortRef}/api/health`;
+    let backendReady = false;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`[usePulseAgent] Health check attempt ${attempt}/${maxRetries}...`);
+        const response = await fetch(healthUrl, {
+          method: 'GET',
+          signal: AbortSignal.timeout(3000) // 3 second timeout per request
+        });
+        if (response.ok) {
+          console.log('[usePulseAgent] Backend is healthy, proceeding with WebSocket connection');
+          backendReady = true;
+          break;
+        }
+      } catch (healthError) {
+        console.log(`[usePulseAgent] Health check failed (attempt ${attempt}):`, healthError);
+        if (attempt < maxRetries) {
+          // Wait 1 second before retry
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+    }
+
+    if (!backendReady) {
+      console.error('[usePulseAgent] Backend health check failed after all retries');
+      sharedIsConnecting = false;
+      throw new Error('Backend is not ready. Please wait and try again.');
+    }
+
     const wsUrl = `ws://127.0.0.1:${sharedPortRef}/ws`;
     console.log('[usePulseAgent] Connecting to:', wsUrl);
 

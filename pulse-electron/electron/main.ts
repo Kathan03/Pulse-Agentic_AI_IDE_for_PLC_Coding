@@ -6,7 +6,7 @@
  */
 
 import { app, BrowserWindow, ipcMain, shell, Menu, dialog } from 'electron';
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, execSync, ChildProcess } from 'child_process';
 import path from 'path';
 import { setupFileSystemHandlers } from './ipc/file-system';
 import { setupWorkspaceHandlers } from './ipc/workspace';
@@ -267,18 +267,36 @@ async function startPythonBackend(): Promise<number> {
  * Stop the Python backend server.
  */
 function stopPythonBackend(): void {
-  if (pythonProcess) {
+  if (pythonProcess && pythonProcess.pid) {
     console.log('[Backend] Stopping Python server...');
-    pythonProcess.kill('SIGTERM');
 
-    // Force kill after 5 seconds if still running
-    setTimeout(() => {
-      if (pythonProcess) {
-        console.log('[Backend] Force killing Python server...');
-        pythonProcess.kill('SIGKILL');
-        pythonProcess = null;
+    // On Windows, SIGTERM doesn't work properly
+    // Use taskkill for reliable termination
+    if (process.platform === 'win32') {
+      try {
+        // /T kills child processes, /F forces termination
+        execSync(`taskkill /pid ${pythonProcess.pid} /T /F`, {
+          windowsHide: true,
+          stdio: 'ignore'
+        });
+        console.log('[Backend] Python server stopped via taskkill');
+      } catch (e) {
+        console.log('[Backend] taskkill returned (process may already be stopped):', e);
       }
-    }, 5000);
+    } else {
+      // On Unix-like systems, use SIGTERM
+      pythonProcess.kill('SIGTERM');
+
+      // Force kill after 5 seconds if still running
+      setTimeout(() => {
+        if (pythonProcess) {
+          console.log('[Backend] Force killing Python server...');
+          pythonProcess.kill('SIGKILL');
+        }
+      }, 5000);
+    }
+
+    pythonProcess = null;
   }
 }
 

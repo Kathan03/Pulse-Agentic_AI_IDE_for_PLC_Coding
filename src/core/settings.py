@@ -37,7 +37,8 @@ class SettingsManager:
     DEFAULT_SETTINGS = {
         "api_keys": {
             "openai": "",
-            "anthropic": ""
+            "anthropic": "",
+            "google": ""
         },
         "models": {
             "master_agent": "gpt-5-mini",
